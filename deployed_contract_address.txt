@@ -1,0 +1,2 @@
+✅ CarbonCreditToken deployed to:
+0x07b4E818447DF5Ef5724C5c0d20C568e0aF461E2
