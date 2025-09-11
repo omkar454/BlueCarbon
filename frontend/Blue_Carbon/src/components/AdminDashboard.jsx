@@ -5,17 +5,18 @@ import { ethers } from "ethers";
 
 const AdminDashboard = () => {
   const [projects, setProjects] = useState([]);
-  const [verifierInputs, setVerifierInputs] = useState({}); // {projectId: ["", "", ""]}
+  const [verifierInputs, setVerifierInputs] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Fetch all projects
+  const [pendingCompanies, setPendingCompanies] = useState([]);
+
+  /* ---------------------- FETCH PROJECTS ---------------------- */
   const fetchProjects = async () => {
     try {
       const res = await axios.get("http://localhost:5000/api/projects/all");
       const projectsData = res.data.projects || [];
       setProjects(projectsData);
 
-      // Pre-populate verifier inputs for approved projects
       const inputs = {};
       projectsData.forEach((project) => {
         inputs[project._id] = [
@@ -31,11 +32,23 @@ const AdminDashboard = () => {
     }
   };
 
+  /* ---------------------- FETCH COMPANIES ---------------------- */
+  const fetchPendingCompanies = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/company/pending");
+      setPendingCompanies(res.data.companies || []);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to fetch pending companies");
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchPendingCompanies();
   }, []);
 
-  // Update verifier input for project
+  /* ---------------------- PROJECT FUNCTIONS ---------------------- */
   const handleVerifierChange = (projectId, index, value) => {
     setVerifierInputs((prev) => {
       const arr = prev[projectId] ? [...prev[projectId]] : ["", "", ""];
@@ -44,18 +57,16 @@ const AdminDashboard = () => {
     });
   };
 
-  // Add a single verifier on-chain
   const handleAddVerifierOnChain = async (projectId, verifierAddress) => {
     if (!verifierAddress || !ethers.isAddress(verifierAddress)) {
       return alert("Invalid Ethereum address");
     }
-
     try {
       setLoading(true);
-      const res = await axios.post(
-        "http://localhost:5000/api/verifier/add",
-        { projectId, verifiers: [verifierAddress] }
-      );
+      const res = await axios.post("http://localhost:5000/api/verifier/add", {
+        projectId,
+        verifiers: [verifierAddress],
+      });
       if (res.data.success) {
         alert(`Verifier ${verifierAddress} added on-chain successfully!`);
         fetchProjects();
@@ -68,14 +79,12 @@ const AdminDashboard = () => {
     }
   };
 
-  // Approve project and assign 3 verifiers in DB
-  const handleApprove = async (projectId) => {
+  const handleApproveProject = async (projectId) => {
     const assignedVerifiers = verifierInputs[projectId];
     if (!assignedVerifiers || assignedVerifiers.length !== 3) {
       return alert("Please assign exactly 3 verifiers for this project.");
     }
 
-    // Validate Ethereum addresses
     for (let i = 0; i < assignedVerifiers.length; i++) {
       if (!ethers.isAddress(assignedVerifiers[i])) {
         return alert(`Verifier ${i + 1} address is invalid.`);
@@ -89,7 +98,7 @@ const AdminDashboard = () => {
         { projectId, verifiers: assignedVerifiers }
       );
       if (res.data.success) {
-        alert("Project approved and verifiers assigned in DB!");
+        alert("Project approved and verifiers assigned!");
         fetchProjects();
       }
     } catch (err) {
@@ -100,7 +109,7 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleReject = async (projectId) => {
+  const handleRejectProject = async (projectId) => {
     try {
       setLoading(true);
       const res = await axios.post("http://localhost:5000/api/projects/reject", {
@@ -118,6 +127,30 @@ const AdminDashboard = () => {
     }
   };
 
+  /* ---------------------- COMPANY FUNCTIONS ---------------------- */
+  const handleApproveCompany = async (id) => {
+    try {
+      await axios.post(`http://localhost:5000/api/company/approve/${id}`);
+      alert("Company approved!");
+      fetchPendingCompanies();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to approve company");
+    }
+  };
+
+  const handleRejectCompany = async (id) => {
+    try {
+      await axios.post(`http://localhost:5000/api/company/reject/${id}`);
+      alert("Company rejected!");
+      fetchPendingCompanies();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to reject company");
+    }
+  };
+
+  /* ---------------------- RENDER ---------------------- */
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-6xl mx-auto">
@@ -125,6 +158,7 @@ const AdminDashboard = () => {
           NCCR Admin Dashboard
         </h1>
 
+        {/* ------------------ PROJECTS ------------------ */}
         <div className="bg-white p-4 rounded shadow">
           <h2 className="text-xl font-semibold mb-4">Submitted Projects</h2>
           {projects.length === 0 && <p>No projects found.</p>}
@@ -169,7 +203,11 @@ const AdminDashboard = () => {
                                   : ""
                               }
                               onChange={(e) =>
-                                handleVerifierChange(project._id, i, e.target.value)
+                                handleVerifierChange(
+                                  project._id,
+                                  i,
+                                  e.target.value
+                                )
                               }
                               className="border rounded p-2"
                             />
@@ -191,14 +229,14 @@ const AdminDashboard = () => {
 
                     <button
                       disabled={loading}
-                      onClick={() => handleApprove(project._id)}
+                      onClick={() => handleApproveProject(project._id)}
                       className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
                     >
                       Approve
                     </button>
                     <button
                       disabled={loading}
-                      onClick={() => handleReject(project._id)}
+                      onClick={() => handleRejectProject(project._id)}
                       className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
                     >
                       Reject
@@ -215,6 +253,51 @@ const AdminDashboard = () => {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ------------------ COMPANIES ------------------ */}
+        <div className="bg-white p-4 rounded shadow mt-6">
+          <h2 className="text-xl font-semibold mb-4">
+            Pending Company Verifications
+          </h2>
+          {pendingCompanies.length === 0 && (
+            <p>No pending company requests.</p>
+          )}
+          {pendingCompanies.map((company) => (
+            <div
+              key={company._id}
+              className="border rounded p-4 flex flex-col md:flex-row justify-between items-center gap-2"
+            >
+              <div>
+                <p>
+                  <strong>Name:</strong> {company.name}
+                </p>
+                <p>
+                  <strong>Wallet:</strong> {company.walletAddress}
+                </p>
+                <p>
+                  <strong>Registration No:</strong> {company.registrationNumber}
+                </p>
+                <p>
+                  <strong>Sector:</strong> {company.sector}
+                </p>
+              </div>
+              <div className="space-x-2">
+                <button
+                  onClick={() => handleApproveCompany(company._id)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleRejectCompany(company._id)}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
