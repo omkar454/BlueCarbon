@@ -7,7 +7,6 @@ import dotenv from "dotenv";
 import Project from "../../models/Project.js";
 import { ethers } from "ethers";
 
-
 dotenv.config({
   path: "C:\\bluecarbon-mvp\\backend\\.env",
 });
@@ -40,7 +39,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       return res
         .status(400)
         .json({ success: false, error: "Missing project fields" });
-        
+
     if (!ngoWalletAddress || !ethers.isAddress(ngoWalletAddress)) {
       return res
         .status(400)

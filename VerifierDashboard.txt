@@ -42,11 +42,7 @@ const VerifierDashboard = () => {
     setLoading(true);
     try {
       const tokenAddress = "0x07b4E818447DF5Ef5724C5c0d20C568e0aF461E2";
-      const tokenContract = new ethers.Contract(
-        tokenAddress,
-        tokenJson.abi,
-        signer
-      );
+      const tokenContract = new ethers.Contract(tokenAddress, tokenJson.abi, signer);
       const tx = await tokenContract.approveMint(BigInt(requestId));
       const receipt = await tx.wait();
       console.log("On-chain approval:", receipt);
@@ -57,23 +53,16 @@ const VerifierDashboard = () => {
       const updatedRequest = res.data.mintRequest;
       updatedRequest.approvals = updatedRequest.approvals || {};
       setRequests((prev) =>
-        prev.map((r) =>
-          r.requestId === requestId ? { ...r, ...updatedRequest } : r
-        )
+        prev.map((r) => (r.requestId === requestId ? { ...r, ...updatedRequest } : r))
       );
 
-      const approvedCount = Object.values(updatedRequest.approvals).filter(
-        (v) => v === true
-      ).length;
+      const approvedCount = Object.values(updatedRequest.approvals).filter((v) => v === true).length;
 
       if (updatedRequest.status === "Executed") {
         alert(
           `✅ CCT minted!\nNGO Wallet: ${updatedRequest.ngoWallet}\nBuffer Wallet: ${updatedRequest.bufferWallet}`
         );
-        window.open(
-          `https://sepolia.etherscan.io/address/${updatedRequest.ngoWallet}`,
-          "_blank"
-        );
+        window.open(`https://sepolia.etherscan.io/address/${updatedRequest.ngoWallet}`, "_blank");
       } else {
         alert(`✅ Approval recorded! (${approvedCount} approvals)`);
       }
@@ -103,17 +92,13 @@ const VerifierDashboard = () => {
       }
     };
     window.ethereum.on("accountsChanged", handleAccountsChanged);
-    return () =>
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+    return () => window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
   }, []);
 
   useEffect(() => {
     if (verifierAddress) {
       fetchPendingRequests(verifierAddress);
-      const interval = setInterval(
-        () => fetchPendingRequests(verifierAddress),
-        10000
-      );
+      const interval = setInterval(() => fetchPendingRequests(verifierAddress), 10000);
       return () => clearInterval(interval);
     }
   }, [verifierAddress]);
@@ -121,9 +106,7 @@ const VerifierDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-blue-800 mb-6">
-          Verifier Dashboard
-        </h1>
+        <h1 className="text-3xl font-bold text-blue-800 mb-6">Verifier Dashboard</h1>
         <div className="bg-white p-4 rounded shadow mb-6">
           <button
             onClick={handleConnectWallet}
@@ -131,11 +114,7 @@ const VerifierDashboard = () => {
           >
             {verifierAddress ? "Wallet Connected" : "Connect Wallet"}
           </button>
-          {verifierAddress && (
-            <p className="mt-2 text-sm text-gray-700">
-              Connected as: {verifierAddress}
-            </p>
-          )}
+          {verifierAddress && <p className="mt-2 text-sm text-gray-700">Connected as: {verifierAddress}</p>}
         </div>
 
         {requests.length === 0 && <p>No pending requests assigned to you.</p>}
@@ -148,12 +127,8 @@ const VerifierDashboard = () => {
               normalizedApprovals[key.toLowerCase()] = approvals[key];
             });
             const totalVerifiers = req.projectId.verifiers.length;
-            const approvedCount = Object.values(normalizedApprovals).filter(
-              (v) => v === true
-            ).length;
-            const isAssigned = req.projectId.verifiers
-              .map((v) => v.toLowerCase())
-              .includes(verifierAddress);
+            const approvedCount = Object.values(normalizedApprovals).filter((v) => v === true).length;
+            const isAssigned = req.projectId.verifiers.map((v) => v.toLowerCase()).includes(verifierAddress);
 
             let statusColor = "text-gray-600";
             let bgColor = "bg-white";
@@ -170,32 +145,16 @@ const VerifierDashboard = () => {
                 className={`border rounded p-4 ${bgColor} flex flex-col md:flex-row justify-between items-start md:items-center gap-2`}
               >
                 <div>
-                  <h3 className="font-semibold text-lg">
-                    {req.projectId.projectName}
-                  </h3>
-                  <p className="text-sm text-gray-700">
-                    {req.projectId.description}
-                  </p>
-                  <p>
-                    <strong>Ecosystem:</strong> {req.projectId.ecosystemType}
-                  </p>
-                  <p>
-                    <strong>Credits Requested:</strong> {req.amount}
-                  </p>
-                  <p>
-                    <strong>Status:</strong>{" "}
-                    <span className={statusColor}>{req.status}</span>
-                  </p>
-                  <p>
-                    <strong>Approvals:</strong> {approvedCount}/{totalVerifiers}{" "}
-                    approved
-                  </p>
+                  <h3 className="font-semibold text-lg">{req.projectId.projectName}</h3>
+                  <p className="text-sm text-gray-700">{req.projectId.description}</p>
+                  <p><strong>Ecosystem:</strong> {req.projectId.ecosystemType}</p>
+                  <p><strong>Credits Requested:</strong> {req.amount}</p>
+                  <p><strong>Status:</strong> <span className={statusColor}>{req.status}</span></p>
+                  <p><strong>Approvals:</strong> {approvedCount}/{totalVerifiers} approved</p>
                   <p className="text-sm text-gray-600">
                     {req.projectId.verifiers
                       .map((v) =>
-                        normalizedApprovals[v.toLowerCase()]
-                          ? `${v} ✅`
-                          : `${v} ❌`
+                        normalizedApprovals[v.toLowerCase()] ? `${v} ✅` : `${v} ❌`
                       )
                       .join(" | ")}
                   </p>

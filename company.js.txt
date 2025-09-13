@@ -1,0 +1,408 @@
+// backend/Routes/company.js
+import express from "express";
+import Project from "../models/Project.js";
+import Company from "../models/company.js";
+import CompanyTransaction from "../models/Company_Transaction.js";
+import { ethers } from "ethers";
+import dotenv from "dotenv";
+import tokenJson from "../Contracts/CarbonCreditToken.json" 
+
+dotenv.config({ path: "C:\\bluecarbon-mvp\\backend\\.env" });
+
+const router = express.Router();
+const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_URL);
+const tokenAddress = process.env.TOKEN_CONTRACT_ADDRESS;
+const ABI = tokenJson.abi;
+
+/* ============================================================
+   📌 REGISTER COMPANY
+   ============================================================ */
+router.post("/register", async (req, res) => {
+  try {
+    const { name, walletAddress, registrationNumber, sector } = req.body;
+
+    if (!name || !walletAddress || !registrationNumber || !sector) {
+      return res
+        .status(400)
+        .json({ success: false, error: "All fields are required" });
+    }
+
+    const existing = await Company.findOne({ walletAddress });
+    if (existing) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Wallet address already registered" });
+    }
+
+    const company = new Company({
+      name,
+      walletAddress,
+      registrationNumber,
+      sector,
+      status: "Pending",
+      isVerified: false,
+    });
+
+    await company.save();
+    res.json({
+      success: true,
+      message: "Company registered. Await NCCR approval.",
+    });
+  } catch (err) {
+    console.error("❌ Register company error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 PENDING COMPANIES
+   ============================================================ */
+router.get("/pending", async (req, res) => {
+  try {
+    const pending = await Company.find({ status: "Pending" });
+    res.json({ success: true, companies: pending });
+  } catch (err) {
+    console.error("❌ Fetch pending companies error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 APPROVE / REJECT COMPANY
+   ============================================================ */
+router.post("/approve/:id", async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id);
+    if (!company)
+      return res
+        .status(404)
+        .json({ success: false, error: "Company not found" });
+
+    company.status = "Approved";
+    company.isVerified = true;
+    await company.save();
+    res.json({ success: true, message: "Company approved successfully" });
+  } catch (err) {
+    console.error("❌ Approve company error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post("/reject/:id", async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id);
+    if (!company)
+      return res
+        .status(404)
+        .json({ success: false, error: "Company not found" });
+
+    company.status = "Rejected";
+    company.isVerified = false;
+    await company.save();
+    res.json({ success: true, message: "Company rejected" });
+  } catch (err) {
+    console.error("❌ Reject company error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 FETCH COMPANY PROJECTS WITH AVAILABLE CCT
+   ============================================================ */
+router.get("/projects", async (req, res) => {
+  try {
+    const { wallet } = req.query;
+    if (!wallet)
+      return res.status(400).json({ success: false, error: "Wallet required" });
+
+    const company = await Company.findOne({ walletAddress: wallet });
+    if (!company)
+      return res
+        .status(404)
+        .json({ success: false, error: "Company not found" });
+
+    // Fetch executed mints
+    const executedRequests = await Project.aggregate([
+      {
+        $lookup: {
+          from: "mintrequests",
+          localField: "_id",
+          foreignField: "projectId",
+          as: "mints",
+        },
+      },
+      { $match: { "mints.status": "Executed" } },
+    ]);
+
+    const projectMap = {};
+
+    executedRequests.forEach((proj) => {
+      let mintedCCT = 0;
+      proj.mints.forEach((m) => (mintedCCT += Number(m.amount)));
+      projectMap[proj._id] = {
+        _id: proj._id,
+        projectName: proj.projectName,
+        description: proj.description,
+        ecosystemType: proj.ecosystemType,
+        location: proj.location,
+        cid: proj.cid,
+        ngoWalletAddress: proj.ngoWalletAddress || "N/A",
+        mintedCCT,
+        retiredCCT: proj.retiredCCT || 0,
+        boughtCCT: 0,
+        availableCCT: 0,
+      };
+    });
+
+    // Apply transactions
+    const txs = await CompanyTransaction.find({
+      project: { $in: Object.keys(projectMap) },
+    });
+    txs.forEach((tx) => {
+      const proj = projectMap[tx.project.toString()];
+      if (!proj) return;
+      if (tx.type === "BUY") proj.boughtCCT += Number(tx.amount);
+      if (tx.type === "RETIRE") proj.retiredCCT += Number(tx.amount);
+    });
+
+    Object.values(projectMap).forEach((proj) => {
+      proj.availableCCT = proj.mintedCCT - proj.retiredCCT - proj.boughtCCT;
+    });
+
+    const projects = Object.values(projectMap).filter(
+      (p) => p.availableCCT > 0
+    );
+
+    res.json({ success: true, company, projects });
+  } catch (err) {
+    console.error("❌ Fetch projects error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 BUY CCT (on-chain verification)
+   ============================================================ */
+router.post("/buy", async (req, res) => {
+  try {
+    const { companyWallet, projectId, amount, txHash, ngoWallet } = req.body;
+    if (!companyWallet || !projectId || !amount || !txHash || !ngoWallet) {
+      return res.status(400).json({ success: false, error: "Missing fields" });
+    }
+
+    const company = await Company.findOne({ walletAddress: companyWallet });
+    if (!company || !company.isVerified) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Company not verified" });
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project)
+      return res
+        .status(404)
+        .json({ success: false, error: "Project not found" });
+
+    // Calculate available CCT
+    const executedRequests = await Project.aggregate([
+      { $match: { _id: project._id } },
+      {
+        $lookup: {
+          from: "mintrequests",
+          localField: "_id",
+          foreignField: "projectId",
+          as: "mints",
+        },
+      },
+    ]);
+
+    let totalMinted = 0;
+    if (executedRequests.length && executedRequests[0].mints.length) {
+      executedRequests[0].mints.forEach((m) => {
+        if (m.status === "Executed") totalMinted += Number(m.amount);
+      });
+    }
+    const totalRetired = project.retiredCCT || 0;
+
+    const txs = await CompanyTransaction.aggregate([
+      { $match: { project: project._id } },
+      { $group: { _id: "$type", sum: { $sum: "$amount" } } },
+    ]);
+
+    let bought = 0;
+    txs.forEach((t) => {
+      if (t._id === "BUY") bought = t.sum;
+    });
+
+    const availableCCT = totalMinted - totalRetired - bought;
+    if (Number(amount) > availableCCT) {
+      return res
+        .status(400)
+        .json({ success: false, error: `Only ${availableCCT} CCT available` });
+    }
+
+    // Verify on-chain
+    const tokenContract = new ethers.Contract(tokenAddress, ABI, provider);
+    const companyBalance = await tokenContract.balanceOf(companyWallet);
+    const amountInWei = ethers.parseUnits(amount.toString(), 18);
+
+    if (companyBalance.lt(amountInWei)) {
+      return res.status(400).json({
+        success: false,
+        error: `Company wallet did not receive ${amount} CCT. Ensure NGO transferred tokens.`,
+      });
+    }
+
+    // Save transaction
+    const transaction = new CompanyTransaction({
+      company: company._id,
+      project: project._id,
+      type: "BUY",
+      amount: Number(amount),
+      txHash,
+      note: "On-chain Purchase",
+    });
+
+    await transaction.save();
+    res.json({
+      success: true,
+      message: "CCT purchase recorded on-chain",
+      txHash,
+    });
+  } catch (err) {
+    console.error("❌ Buy CCT error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 RETIRE CCT
+   ============================================================ */
+router.post("/retire", async (req, res) => {
+  try {
+    const { companyWallet, projectId, amount, txHash } = req.body;
+    if (!companyWallet || !projectId || !amount || !txHash) {
+      return res.status(400).json({ success: false, error: "Missing fields" });
+    }
+
+    const company = await Company.findOne({ walletAddress: companyWallet });
+    if (!company || !company.isVerified)
+      return res
+        .status(403)
+        .json({ success: false, error: "Company not verified" });
+
+    const project = await Project.findById(projectId);
+    if (!project)
+      return res
+        .status(404)
+        .json({ success: false, error: "Project not found" });
+
+    // Check ownership
+    const bought = await CompanyTransaction.aggregate([
+      { $match: { company: company._id, project: project._id, type: "BUY" } },
+      { $group: { _id: null, sum: { $sum: "$amount" } } },
+    ]);
+    const retired = await CompanyTransaction.aggregate([
+      {
+        $match: { company: company._id, project: project._id, type: "RETIRE" },
+      },
+      { $group: { _id: null, sum: { $sum: "$amount" } } },
+    ]);
+
+    const boughtSum = bought.length ? bought[0].sum : 0;
+    const retiredSum = retired.length ? retired[0].sum : 0;
+    const ownedCCT = boughtSum - retiredSum;
+
+    if (Number(amount) > ownedCCT) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          error: `You only own ${ownedCCT} CCT from this project`,
+        });
+    }
+
+    project.retiredCCT = (project.retiredCCT || 0) + Number(amount);
+    await project.save();
+
+    const transaction = new CompanyTransaction({
+      company: company._id,
+      project: project._id,
+      type: "RETIRE",
+      amount: Number(amount),
+      txHash,
+      note: "On-chain Retirement",
+    });
+
+    await transaction.save();
+
+    res.json({
+      success: true,
+      message: "CCT retired successfully",
+      pdfUrl: `/certificates/${project.projectName}-certificate.pdf`,
+      txHash,
+    });
+  } catch (err) {
+    console.error("❌ Retire CCT error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 FETCH COMPANY TRANSACTIONS
+   ============================================================ */
+router.get("/transactions/:companyId", async (req, res) => {
+  try {
+    const transactions = await CompanyTransaction.find({
+      company: req.params.companyId,
+    })
+      .sort({ createdAt: -1 })
+      .populate("project", "projectName");
+
+    const formatted = transactions.map((tx) => ({
+      _id: tx._id,
+      type: tx.type,
+      amount: tx.amount,
+      txHash: tx.txHash,
+      note: tx.note,
+      projectName: tx.project?.projectName || "N/A",
+      createdAt: tx.createdAt,
+    }));
+
+    res.json({ success: true, transactions: formatted });
+  } catch (err) {
+    console.error("❌ Fetch company transactions error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================================================
+   📌 ADMIN – ALL TRANSACTIONS
+   ============================================================ */
+router.get("/transactions/all", async (req, res) => {
+  try {
+    const transactions = await CompanyTransaction.find()
+      .sort({ createdAt: -1 })
+      .populate("company", "name walletAddress")
+      .populate("project", "projectName");
+
+    const formatted = transactions.map((tx) => ({
+      _id: tx._id,
+      companyName: tx.company?.name || "N/A",
+      companyWallet: tx.company?.walletAddress || "N/A",
+      projectName: tx.project?.projectName || "N/A",
+      type: tx.type,
+      amount: tx.amount,
+      txHash: tx.txHash,
+      note: tx.note,
+      createdAt: tx.createdAt,
+    }));
+
+    res.json({ success: true, transactions: formatted });
+  } catch (err) {
+    console.error("❌ Fetch all transactions error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+export default router;

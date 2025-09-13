@@ -1,0 +1,336 @@
+// src/components/CompanyDashboard.jsx
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { ethers } from "ethers";
+import tokenJson from "../../Contracts/CarbonCreditToken.json";
+
+const BASE_URL = "http://localhost:5000/api/company";
+const CONTRACT_ADDRESS = "0x07b4E818447DF5Ef5724C5c0d20C568e0aF461E2";
+const ABI = tokenJson.abi;
+
+const CompanyDashboard = () => {
+  const [company, setCompany] = useState({
+    name: "",
+    walletAddress: "",
+    registrationNumber: "",
+    sector: "",
+  });
+  const [isVerified, setIsVerified] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+
+  // Fetch company status and projects
+  const fetchCompanyStatus = async (wallet) => {
+    if (!wallet) return;
+    try {
+      const res = await axios.get(`${BASE_URL}/projects?wallet=${wallet}`);
+      const companyData = res.data.company;
+      const projectsData = res.data.projects || [];
+
+      if (companyData) {
+        setCompany(companyData);
+        setIsVerified(companyData.isVerified);
+        setSubmitted(true);
+        localStorage.setItem("companyWallet", companyData.walletAddress);
+      }
+
+      setProjects(projectsData);
+
+      if (companyData?._id) {
+        const txRes = await axios.get(
+          `${BASE_URL}/transactions/${companyData._id}`
+        );
+        if (txRes.data.success) setTransactions(txRes.data.transactions);
+      }
+    } catch (err) {
+      console.error(
+        "❌ Fetch company status error:",
+        err.response?.data || err.message
+      );
+    }
+  };
+
+  useEffect(() => {
+    const storedWallet = localStorage.getItem("companyWallet");
+    if (storedWallet) {
+      setCompany((prev) => ({ ...prev, walletAddress: storedWallet }));
+      fetchCompanyStatus(storedWallet);
+    }
+  }, []);
+
+  // Submit company details
+  const handleSubmitCompany = async () => {
+    const { name, walletAddress, registrationNumber, sector } = company;
+    if (!name || !walletAddress || !registrationNumber || !sector) {
+      return alert("Please fill all fields");
+    }
+    try {
+      const res = await axios.post(`${BASE_URL}/register`, company);
+      if (res.data.success) {
+        alert(res.data.message);
+        setSubmitted(true);
+        fetchCompanyStatus(walletAddress);
+      }
+    } catch (err) {
+      console.error(
+        "❌ Submit company error:",
+        err.response?.data || err.message
+      );
+      alert(err.response?.data?.error || "Failed to submit company details");
+    }
+  };
+
+  // Buy CCT from NGO
+  const handleBuy = async (projectId, availableCCT, ngoWallet) => {
+    if (!ngoWallet) return alert("NGO wallet missing for this project");
+
+    const amount = prompt(
+      `Enter CCT amount to buy (Available: ${availableCCT}):`
+    );
+    if (!amount || isNaN(amount) || Number(amount) <= 0)
+      return alert("Enter a valid amount");
+    if (Number(amount) > availableCCT)
+      return alert(`Only ${availableCCT} CCT available`);
+
+    try {
+      if (!window.ethereum) return alert("MetaMask not detected");
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+      const weiAmount = ethers.parseUnits(amount.toString(), 18);
+
+      // Transfer CCT from NGO → Company
+      const tx = await contract.transferFrom(
+        ngoWallet,
+        company.walletAddress,
+        weiAmount
+      );
+      await tx.wait();
+
+      // Log on backend
+      const res = await axios.post(`${BASE_URL}/buy`, {
+        companyWallet: company.walletAddress,
+        projectId,
+        amount: Number(amount),
+        txHash: tx.hash,
+        ngoWallet,
+      });
+
+      if (res.data.success) {
+        alert("✅ CCT purchased on-chain!");
+        fetchCompanyStatus(company.walletAddress);
+      }
+    } catch (err) {
+      console.error("❌ Buy CCT error:", err.response?.data || err.message);
+      alert(err.response?.data?.error || "Error buying CCT");
+    }
+  };
+
+  // Retire CCT (burn)
+  const handleRetire = async (projectId, ownedCCT) => {
+    const amount = prompt(`Enter CCT amount to retire (Owned: ${ownedCCT}):`);
+    if (!amount || isNaN(amount) || Number(amount) <= 0)
+      return alert("Enter a valid amount");
+    if (Number(amount) > ownedCCT)
+      return alert(`Only ${ownedCCT} CCT can be retired`);
+
+    try {
+      if (!window.ethereum) return alert("MetaMask not detected");
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+      const weiAmount = ethers.parseUnits(amount.toString(), 18);
+      const tx = await contract.retireCredits(weiAmount);
+      await tx.wait();
+
+      const res = await axios.post(`${BASE_URL}/retire`, {
+        companyWallet: company.walletAddress,
+        projectId,
+        amount: Number(amount),
+        txHash: tx.hash,
+      });
+
+      if (res.data.success) {
+        alert(`🔥 CCT retired! Certificate generated.`);
+        window.open(res.data.pdfUrl, "_blank");
+        fetchCompanyStatus(company.walletAddress);
+      }
+    } catch (err) {
+      console.error("❌ Retire CCT error:", err.response?.data || err.message);
+      alert(err.response?.data?.error || "Error retiring CCT");
+    }
+  };
+
+  return (
+    <div className="min-h-screen p-6 bg-gray-100">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6 text-blue-800">
+          Company Dashboard
+        </h1>
+
+        {/* Registration Form */}
+        {!submitted && (
+          <div className="bg-white p-6 rounded shadow mb-6">
+            <h2 className="text-xl font-semibold mb-4">
+              Enter Company Details
+            </h2>
+            {["name", "walletAddress", "registrationNumber", "sector"].map(
+              (field) => (
+                <input
+                  key={field}
+                  type="text"
+                  placeholder={field.replace(/([A-Z])/g, " $1")}
+                  value={company[field]}
+                  onChange={(e) =>
+                    setCompany({ ...company, [field]: e.target.value })
+                  }
+                  className="border p-2 w-full rounded mb-2"
+                />
+              )
+            )}
+            <button
+              onClick={handleSubmitCompany}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            >
+              Submit
+            </button>
+          </div>
+        )}
+
+        {/* Pending Approval */}
+        {submitted && !isVerified && (
+          <div className="bg-yellow-100 p-6 rounded shadow mb-6">
+            <p className="text-yellow-800 font-semibold">
+              Your company details have been submitted. Awaiting NCCR
+              approval...
+            </p>
+          </div>
+        )}
+
+        {/* Verified Dashboard */}
+        {isVerified && (
+          <div className="space-y-4">
+            {projects.length === 0 && (
+              <p className="text-gray-600">No projects available.</p>
+            )}
+
+            {projects.map((proj) => {
+              const ownedCCT = proj.boughtCCT - proj.retiredCCT;
+              return (
+                <div
+                  key={proj._id}
+                  className="bg-white p-4 rounded shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
+                >
+                  <div>
+                    <h2 className="font-semibold text-lg">
+                      {proj.projectName}
+                    </h2>
+                    <p>Ecosystem: {proj.ecosystemType}</p>
+                    <p>Status: {proj.status}</p>
+                    <p>NGO Wallet: {proj.ngoWalletAddress || "❌ Missing"}</p>
+                    {proj.cid && (
+                      <p>
+                        <a
+                          href={`https://ipfs.io/ipfs/${proj.cid}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          View Evidence
+                        </a>
+                      </p>
+                    )}
+                    <p>Available CCT: {proj.availableCCT}</p>
+                    <p>Owned CCT: {ownedCCT}</p>
+                    <p>Retired CCT: {proj.retiredCCT}</p>
+                  </div>
+
+                  <div className="space-x-2 mt-2 md:mt-0">
+                    <button
+                      onClick={() =>
+                        handleBuy(
+                          proj._id,
+                          proj.availableCCT,
+                          proj.ngoWalletAddress
+                        )
+                      }
+                      disabled={
+                        proj.availableCCT <= 0 || !proj.ngoWalletAddress
+                      }
+                      className={`px-4 py-2 rounded text-white ${
+                        proj.availableCCT > 0 && proj.ngoWalletAddress
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      Buy CCT
+                    </button>
+                    <button
+                      onClick={() => handleRetire(proj._id, ownedCCT)}
+                      disabled={ownedCCT <= 0}
+                      className={`px-4 py-2 rounded text-white ${
+                        ownedCCT > 0
+                          ? "bg-red-600 hover:bg-red-700"
+                          : "bg-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      Retire CCT
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Transaction History */}
+            <div className="bg-white p-4 rounded shadow mt-6">
+              <h2 className="text-xl font-semibold mb-4">
+                Transaction History
+              </h2>
+              {transactions.length === 0 && <p>No transactions yet.</p>}
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border p-2">Type</th>
+                    <th className="border p-2">Project</th>
+                    <th className="border p-2">Amount</th>
+                    <th className="border p-2">TX Hash</th>
+                    <th className="border p-2">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx._id}>
+                      <td className="border p-2">{tx.type}</td>
+                      <td className="border p-2">{tx.projectName}</td>
+                      <td className="border p-2">{tx.amount}</td>
+                      <td className="border p-2">
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${tx.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          {tx.txHash.slice(0, 10)}...
+                        </a>
+                      </td>
+                      <td className="border p-2">
+                        {new Date(tx.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CompanyDashboard;

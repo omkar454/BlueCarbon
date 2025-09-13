@@ -95,9 +95,25 @@ router.get("/byNgo/:wallet", async (req, res) => {
         .json({ success: false, error: "Wallet address required" });
     }
 
-    const projects = await Project.find({ ngoWalletAddress: wallet })
+    console.log("Fetching projects for NGO wallet:", wallet);
+
+    // Try both case-sensitive and case-insensitive search
+    const projects = await Project.find({
+      $or: [
+        { ngoWalletAddress: wallet },
+        { ngoWalletAddress: wallet.toLowerCase() },
+        { ngoWalletAddress: wallet.toUpperCase() },
+      ],
+    })
       .populate("mintRequests")
       .sort({ createdAt: -1 });
+
+    console.log("Found projects:", projects.length);
+    console.log(
+      "Project names:",
+      projects.map((p) => p.projectName)
+    );
+
     res.json({ success: true, projects });
   } catch (err) {
     console.error("❌ Error fetching NGO projects:", err);
