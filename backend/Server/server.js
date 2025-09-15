@@ -14,7 +14,7 @@ import verifierRouter from "../Routes/verifier.js";
 import mintRequestsRouter from "../Routes/mintRequests.js";
 import projectsRouter from "../Routes/projects.js";
 import companyRouter from "../Routes/company.js";
-import buyRequestsRouter from "../routes/buyRequests.js";
+import buyRequestsRouter from "../Routes/buyRequests.js";
 
 
 dotenv.config({
