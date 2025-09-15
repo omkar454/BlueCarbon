@@ -73,8 +73,6 @@ const CompanyDashboard = () => {
       const res = await axios.post(`${BASE_URL}/register`, company);
       if (res.data.success) {
         alert(res.data.message || "Company details submitted!");
-
-        // Fetch latest company status immediately
         fetchCompanyStatus(walletAddress);
       }
     } catch (err) {
@@ -88,7 +86,8 @@ const CompanyDashboard = () => {
 
   // Create buy request for CCT
   const handleBuy = async (projectId, availableCCT, ngoWallet) => {
-    if (!ngoWallet) return alert("NGO wallet missing for this project");
+    if (!ngoWallet)
+      return alert("Project Developer wallet missing for this project");
 
     const amount = prompt(
       `Enter CCT amount to buy (Available: ${availableCCT}):`
@@ -100,7 +99,6 @@ const CompanyDashboard = () => {
 
     setLoading(true);
     try {
-      // Create buy request
       const res = await axios.post(`${BASE_URL}/createBuyRequest`, {
         companyId: company._id,
         projectId,
@@ -108,23 +106,16 @@ const CompanyDashboard = () => {
       });
 
       if (res.data.success) {
-        alert(
-          "✅ Buy request created! The NGO will be notified to approve your request."
-        );
-        // Refresh data
-        await fetchCompanyStatus(company.walletAddress);
+        alert("✅ Buy request created! The Project Developer will review it.");
+        fetchCompanyStatus(company.walletAddress);
       } else {
         alert("❌ Failed to create buy request: " + res.data.error);
       }
     } catch (err) {
       console.error("❌ Create buy request error:", err);
-      let errorMessage = "Error creating buy request";
-
-      if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      }
-
-      alert("❌ " + errorMessage);
+      alert(
+        "❌ " + (err.response?.data?.error || "Error creating buy request")
+      );
     } finally {
       setLoading(false);
     }
@@ -147,7 +138,6 @@ const CompanyDashboard = () => {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       const weiAmount = ethers.parseUnits(amount.toString(), 18);
 
-      // Check company's balance
       const balance = await contract.balanceOf(company.walletAddress);
       if (balance < weiAmount) {
         alert("❌ Insufficient CCT balance for retirement");
@@ -165,29 +155,23 @@ const CompanyDashboard = () => {
       });
 
       if (res.data.success) {
-        alert(`🔥 CCT retired successfully! Certificate generated.`);
+        alert("🔥 CCT retired successfully! Certificate generated.");
         if (res.data.pdfUrl) {
-          // Construct full URL for the PDF
-          const fullPdfUrl = `http://localhost:5000${res.data.pdfUrl}`;
-          window.open(fullPdfUrl, "_blank");
+          window.open(`http://localhost:5000${res.data.pdfUrl}`, "_blank");
         }
-        // Refresh data
-        await fetchCompanyStatus(company.walletAddress);
+        fetchCompanyStatus(company.walletAddress);
       } else {
         alert("❌ Failed to record retirement: " + res.data.error);
       }
     } catch (err) {
       console.error("❌ Retire CCT error:", err);
       let errorMessage = "Error retiring CCT";
-
-      if (err.code === "INSUFFICIENT_FUNDS") {
+      if (err.code === "INSUFFICIENT_FUNDS")
         errorMessage = "Insufficient funds for gas";
-      } else if (err.code === "USER_REJECTED") {
+      else if (err.code === "USER_REJECTED")
         errorMessage = "Transaction rejected by user";
-      } else if (err.response?.data?.error) {
+      else if (err.response?.data?.error)
         errorMessage = err.response.data.error;
-      }
-
       alert("❌ " + errorMessage);
     } finally {
       setLoading(false);
@@ -197,109 +181,40 @@ const CompanyDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section */}
+        {/* Header */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                <span className="text-blue-600">Company</span> Dashboard
-              </h1>
-              <p className="text-gray-600">
-                Manage your blue carbon projects and carbon credit transactions
-              </p>
-            </div>
-            <div className="hidden md:block">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 4a1 1 0 011-1h12a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8zm2 2a1 1 0 000 2h6a1 1 0 100-2H5z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            <span className="text-blue-600">Company</span> Dashboard
+          </h1>
+          <p className="text-gray-600">
+            Manage your projects and carbon credits
+          </p>
         </div>
 
-        {/* Error Display */}
+        {/* Error */}
         {error && (
           <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6 rounded-lg">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-red-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">
-                  <strong>Error:</strong> {error}
-                </p>
-              </div>
-            </div>
+            <p className="text-sm text-red-700">
+              <strong>Error:</strong> {error}
+            </p>
           </div>
         )}
 
-        {/* Loading Display */}
+        {/* Loading */}
         {loading && (
           <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-lg">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg
-                  className="animate-spin h-5 w-5 text-blue-400"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-700">
-                  <strong>Loading...</strong> Please wait while we process your
-                  request.
-                </p>
-              </div>
-            </div>
+            <p className="text-sm text-blue-700">
+              <strong>Loading...</strong>
+            </p>
           </div>
         )}
 
-        {/* Registration Form */}
+        {/* Registration */}
         {!submitted && (
           <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Company Registration
-              </h2>
-              <p className="text-gray-600">
-                Register your company to participate in the blue carbon
-                ecosystem
-              </p>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Company Registration
+            </h2>
             {["name", "walletAddress", "registrationNumber", "sector"].map(
               (field) => (
                 <input
@@ -342,6 +257,12 @@ const CompanyDashboard = () => {
 
             {projects.map((proj) => {
               const ownedCCT = (proj.boughtCCT || 0) - (proj.retiredCCT || 0);
+              const availableCCT =
+                (proj.totalMintedCCT || 0) -
+                (proj.bufferCCT || 0) -
+                (proj.retiredCCT || 0) -
+                (proj.soldCCT || 0);
+
               return (
                 <div
                   key={proj._id}
@@ -353,21 +274,22 @@ const CompanyDashboard = () => {
                     </h2>
                     <p>Ecosystem: {proj.ecosystemType}</p>
                     <p>Status: {proj.status}</p>
-                    <p>NGO Wallet: {proj.ngoWalletAddress || "❌ Missing"}</p>
+                    <p>
+                      Developer Wallet: {proj.ngoWalletAddress || "❌ Missing"}
+                    </p>
                     {proj.cid && (
-                      <p>
-                        <a
-                          href={`https://ipfs.io/ipfs/${proj.cid}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          View Evidence
-                        </a>
-                      </p>
+                      <a
+                        href={`https://ipfs.io/ipfs/${proj.cid}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        View Evidence
+                      </a>
                     )}
                     <p>Total Minted CCT: {proj.totalMintedCCT || 0}</p>
-                    <p>Available CCT: {proj.availableCCT || 0}</p>
+                    <p>Buffer Wallet CCT: {proj.bufferCCT || 0}</p>
+                    <p>Available CCT: {availableCCT}</p>
                     <p>Owned CCT: {ownedCCT}</p>
                     <p>Retired CCT: {proj.retiredCCT || 0}</p>
                   </div>
@@ -375,19 +297,13 @@ const CompanyDashboard = () => {
                   <div className="space-x-2 mt-2 md:mt-0">
                     <button
                       onClick={() =>
-                        handleBuy(
-                          proj._id,
-                          proj.availableCCT,
-                          proj.ngoWalletAddress
-                        )
+                        handleBuy(proj._id, availableCCT, proj.ngoWalletAddress)
                       }
                       disabled={
-                        loading ||
-                        !(proj.availableCCT > 0 && proj.ngoWalletAddress)
+                        loading || !(availableCCT > 0 && proj.ngoWalletAddress)
                       }
                       className={`px-4 py-2 rounded text-white ${
-                        loading ||
-                        !(proj.availableCCT > 0 && proj.ngoWalletAddress)
+                        loading || !(availableCCT > 0 && proj.ngoWalletAddress)
                           ? "bg-gray-400 cursor-not-allowed"
                           : "bg-green-600 hover:bg-green-700"
                       }`}
@@ -432,7 +348,7 @@ const CompanyDashboard = () => {
                       <tr key={tx._id}>
                         <td className="border p-2">{tx.type}</td>
                         <td className="border p-2">{tx.projectName}</td>
-                        <td className="border p-2">{tx.amount}</td>
+                        <td className="border p-2">{tx.amount} CCT</td>
                         <td className="border p-2">
                           <a
                             href={`https://sepolia.etherscan.io/tx/${tx.txHash}`}

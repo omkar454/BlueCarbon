@@ -10,6 +10,9 @@ const VerifierDashboard = () => {
   const [signer, setSigner] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // State for minted info message
+  const [mintMessage, setMintMessage] = useState(null);
+
   const fetchPendingRequests = async (address = verifierAddress) => {
     if (!address) return;
     try {
@@ -48,34 +51,46 @@ const VerifierDashboard = () => {
         signer
       );
       const tx = await tokenContract.approveMint(BigInt(requestId));
-      const receipt = await tx.wait();
-      console.log("On-chain approval:", receipt);
+      await tx.wait();
 
       const res = await approveMintRequest(requestId, verifierAddress, tx.hash);
       if (!res.data.success) return alert(`❌ ${res.data.error}`);
 
       const updatedRequest = res.data.mintRequest;
       updatedRequest.approvals = updatedRequest.approvals || {};
+
       setRequests((prev) =>
         prev.map((r) =>
           r.requestId === requestId ? { ...r, ...updatedRequest } : r
         )
       );
 
-      const approvedCount = Object.values(updatedRequest.approvals).filter(
+      const approvalsCount = Object.values(updatedRequest.approvals).filter(
         (v) => v === true
       ).length;
 
+      // If status is executed, show professional pop-up message
       if (updatedRequest.status === "Executed") {
+        const totalAmount = Number(updatedRequest.amount);
+        const developerAmount = Math.floor(totalAmount * 0.9); // 90% for project developer
+        const bufferAmount = totalAmount - developerAmount; // 10% for buffer
+
+        setMintMessage({
+          ngoWallet: updatedRequest.ngoWallet,
+          bufferWallet: updatedRequest.bufferWallet,
+          developerAmount,
+          bufferAmount,
+        });
+
+        // Optional alert
         alert(
-          `✅ CCT minted!\nNGO Wallet: ${updatedRequest.ngoWallet}\nBuffer Wallet: ${updatedRequest.bufferWallet}`
+          `✅ CCT Minted Successfully!\nProject Developer Wallet: ${updatedRequest.ngoWallet}\nBuffer Wallet: ${updatedRequest.bufferWallet}`
         );
-        window.open(
-          `https://sepolia.etherscan.io/address/${updatedRequest.ngoWallet}`,
-          "_blank"
-        );
+
+        // Hide message automatically after 20 seconds
+        setTimeout(() => setMintMessage(null), 20000);
       } else {
-        alert(`✅ Approval recorded! (${approvedCount} approvals)`);
+        alert(`✅ Approval recorded! (${approvalsCount} approvals)`);
       }
     } catch (err) {
       console.error(err);
@@ -124,21 +139,54 @@ const VerifierDashboard = () => {
         <h1 className="text-3xl font-bold text-blue-800 mb-6">
           Verifier Dashboard
         </h1>
-        <div className="bg-white p-4 rounded shadow mb-6">
+
+        {/* Wallet Connection */}
+        <div className="bg-white p-4 rounded shadow mb-6 flex justify-between items-center">
           <button
             onClick={handleConnectWallet}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            className={`px-4 py-2 rounded text-white ${
+              verifierAddress ? "bg-green-600" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             {verifierAddress ? "Wallet Connected" : "Connect Wallet"}
           </button>
           {verifierAddress && (
-            <p className="mt-2 text-sm text-gray-700">
+            <p className="text-sm text-gray-700">
               Connected as: {verifierAddress}
             </p>
           )}
         </div>
 
-        {requests.length === 0 && <p>No pending requests assigned to you.</p>}
+        {/* Minted CCT message */}
+        {mintMessage && (
+          <div className="bg-green-100 border border-green-400 p-4 rounded mb-6 shadow-md">
+            <h2 className="text-green-800 font-semibold text-lg mb-2">
+              ✅ CCT Minted Successfully!
+            </h2>
+            <p>
+              Project Developer Wallet:{" "}
+              <span className="font-mono">{mintMessage.ngoWallet}</span>
+            </p>
+            <p>
+              Amount Credited:{" "}
+              <strong>{mintMessage.developerAmount} CCT</strong>
+            </p>
+            <p>
+              Buffer Wallet:{" "}
+              <span className="font-mono">{mintMessage.bufferWallet}</span>
+            </p>
+            <p>
+              Amount Credited: <strong>{mintMessage.bufferAmount} CCT</strong>
+            </p>
+            <p className="text-sm text-gray-700 mt-1">
+              This message will disappear automatically.
+            </p>
+          </div>
+        )}
+
+        {requests.length === 0 && (
+          <p className="text-gray-600">No pending requests assigned to you.</p>
+        )}
 
         <div className="space-y-4">
           {requests.map((req) => {
@@ -149,7 +197,7 @@ const VerifierDashboard = () => {
             });
             const totalVerifiers = req.projectId.verifiers.length;
             const approvedCount = Object.values(normalizedApprovals).filter(
-              (v) => v === true
+              (v) => v
             ).length;
             const isAssigned = req.projectId.verifiers
               .map((v) => v.toLowerCase())
@@ -167,9 +215,9 @@ const VerifierDashboard = () => {
             return (
               <div
                 key={req._id}
-                className={`border rounded p-4 ${bgColor} flex flex-col md:flex-row justify-between items-start md:items-center gap-2`}
+                className={`border rounded p-4 ${bgColor} flex flex-col md:flex-row justify-between gap-4`}
               >
-                <div>
+                <div className="flex-1 space-y-1">
                   <h3 className="font-semibold text-lg">
                     {req.projectId.projectName}
                   </h3>
@@ -182,6 +230,16 @@ const VerifierDashboard = () => {
                   <p>
                     <strong>Credits Requested:</strong> {req.amount}
                   </p>
+                  {req.projectId.cid && (
+                    <a
+                      href={`https://ipfs.io/ipfs/${req.projectId.cid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      View Evidence
+                    </a>
+                  )}
                   <p>
                     <strong>Status:</strong>{" "}
                     <span className={statusColor}>{req.status}</span>
@@ -199,40 +257,13 @@ const VerifierDashboard = () => {
                       )
                       .join(" | ")}
                   </p>
-
-                  {req.status === "Executed" && req.mintedToNGO && (
-                    <>
-                      <p className="mt-2 text-green-700 font-semibold">
-                        ✅ Credits minted to NGO wallet:{" "}
-                        <a
-                          href={`https://sepolia.etherscan.io/address/${req.ngoWallet}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline text-blue-600 font-mono"
-                        >
-                          {req.ngoWallet}
-                        </a>
-                      </p>
-                      <p className="mt-1 text-yellow-700 font-semibold">
-                        10% in buffer wallet:{" "}
-                        <a
-                          href={`https://sepolia.etherscan.io/address/${req.bufferWallet}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline text-blue-600 font-mono"
-                        >
-                          {req.bufferWallet}
-                        </a>
-                      </p>
-                    </>
-                  )}
                 </div>
 
                 {req.status !== "Executed" && isAssigned && (
                   <button
                     disabled={loading}
                     onClick={() => handleApprove(req.requestId)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                    className="self-start md:self-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
                   >
                     Approve
                   </button>

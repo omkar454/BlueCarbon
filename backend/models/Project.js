@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import MintRequest from "./mintRequests.js"; // import to populate executed requests
 
 const projectSchema = new mongoose.Schema(
   {
@@ -15,26 +14,24 @@ const projectSchema = new mongoose.Schema(
       { type: mongoose.Schema.Types.ObjectId, ref: "mintrequest" },
     ],
     minApprovals: { type: Number, default: 2 },
-    retiredCCT: { type: Number, default: 0 }, // total retired CCT
+
+    // ✅ New CCT tracking fields
+    totalMintedCCT: { type: Number, default: 0 }, // total ever minted
+    bufferCCT: { type: Number, default: 0 }, // 10% buffer allocation
+    soldCCT: { type: Number, default: 0 }, // total sold to companies
+    retiredCCT: { type: Number, default: 0 }, // total retired
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
-// Virtual field to calculate total minted CCT from executed mintRequests
-projectSchema.virtual("availableCCT").get(async function () {
-  if (!this.mintRequests || this.mintRequests.length === 0) return 0;
-
-  const executedRequests = await MintRequest.find({
-    _id: { $in: this.mintRequests },
-    status: "Executed",
-  });
-
-  const totalMinted = executedRequests.reduce(
-    (sum, req) => sum + Number(req.amount || 0),
-    0
+// ✅ Virtual for available credits
+projectSchema.virtual("availableCCT").get(function () {
+  return (
+    (this.totalMintedCCT || 0) -
+    (this.bufferCCT || 0) -
+    (this.soldCCT || 0) -
+    (this.retiredCCT || 0)
   );
-
-  return totalMinted - (this.retiredCCT || 0);
 });
 
 // ✅ Prevent OverwriteModelError

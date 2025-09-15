@@ -52,6 +52,7 @@ const AdminDashboard = () => {
   const handleVerifierChange = (projectId, index, value) => {
     setVerifierInputs((prev) => {
       const arr = prev[projectId] ? [...prev[projectId]] : ["", "", ""];
+
       arr[index] = value;
       return { ...prev, [projectId]: arr };
     });
@@ -176,6 +177,19 @@ const AdminDashboard = () => {
                     {project.projectName}
                   </h3>
                   <p>{project.description}</p>
+
+                  {/* ------------------ VIEW EVIDENCE ------------------ */}
+                  {project.cid && (
+                    <a
+                      href={`https://ipfs.io/ipfs/${project.cid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      View Evidence
+                    </a>
+                  )}
+
                   <p>
                     <strong>Status:</strong>{" "}
                     <span

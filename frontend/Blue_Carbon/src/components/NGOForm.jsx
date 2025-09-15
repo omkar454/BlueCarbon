@@ -57,7 +57,7 @@ const NGOForm = () => {
       setNgoWallet(address);
       await fetchProjects(address);
       await fetchBuyRequests(address);
-      alert(`✅ Connected NGO wallet: ${address}`);
+      alert(`✅ Connected Project Developer wallet: ${address}`);
     } catch (err) {
       console.error("Wallet connection failed:", err);
       alert("Wallet connection failed");
@@ -107,7 +107,7 @@ const NGOForm = () => {
         setNgoWallet(address);
         fetchProjects(address);
         fetchBuyRequests(address);
-        alert(`Switched to NGO wallet: ${address}`);
+        alert(`Switched to Project Developer wallet: ${address}`);
       } else {
         setSigner(null);
         setNgoWallet("");
@@ -214,7 +214,8 @@ const NGOForm = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                <span className="text-blue-600">NGO</span> Dashboard
+                <span className="text-blue-600">Project Developer</span>{" "}
+                Dashboard
               </h1>
               <p className="text-gray-600">
                 Manage blue carbon projects and approve carbon credit requests
@@ -244,7 +245,9 @@ const NGOForm = () => {
             onClick={handleConnectWallet}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
           >
-            {ngoWallet ? "Wallet Connected" : "Connect NGO Wallet"}
+            {ngoWallet
+              ? "Wallet Connected"
+              : "Connect Project Developer Wallet"}
           </button>
           {ngoWallet && (
             <div className="mt-2 text-sm text-gray-700">
@@ -477,25 +480,61 @@ const NGOForm = () => {
               )}
 
               {proj.mintRequests?.length > 0 && (
-                <div className="mt-4">
+                <div className="mt-3">
                   <h3 className="font-semibold text-gray-700">
                     Mint Requests:
                   </h3>
                   <ul className="list-disc ml-6">
-                    {proj.mintRequests.map((req) => (
-                      <li key={req._id} className="text-gray-700">
-                        <span className="font-medium">Amount:</span>{" "}
-                        {req.amount} CCT |{" "}
-                        <span className="font-medium">Status:</span>{" "}
-                        {req.status} |{" "}
-                        <span className="font-medium">Approvals:</span>{" "}
-                        {proj.verifiers
-                          ?.map((v) =>
-                            req.approvals?.[v] ? `${v} ✅` : `${v} ❌`
-                          )
-                          .join(" | ")}
-                      </li>
-                    ))}
+                    {proj.mintRequests.map((req) => {
+                      const totalAmount = Number(req.amount);
+                      const developerAmount = Math.floor(totalAmount * 0.9);
+                      const bufferAmount = totalAmount - developerAmount;
+
+                      return (
+                        <li key={req._id} className="text-gray-700 mb-2">
+                          <span className="font-medium">Amount Requested:</span>{" "}
+                          {req.amount} CCT |{" "}
+                          <span className="font-medium">Status:</span>{" "}
+                          {req.status}
+                          <div className="mt-1">
+                            {req.status === "Executed" ? (
+                              <div className="bg-green-50 border border-green-400 text-green-800 px-4 py-3 rounded shadow">
+                                <p className="font-semibold">
+                                  ✅ Verifiers approved the CCT request
+                                </p>
+                                <p>
+                                  Project Developer Wallet:{" "}
+                                  <span className="font-mono">
+                                    {req.ngoWallet}
+                                  </span>{" "}
+                                  | Amount Credited:{" "}
+                                  <strong>{developerAmount} CCT</strong>
+                                </p>
+                                <p>
+                                  Buffer Wallet:{" "}
+                                  <span className="font-mono">
+                                    {req.bufferWallet}
+                                  </span>{" "}
+                                  | Amount Credited:{" "}
+                                  <strong>{bufferAmount} CCT</strong>
+                                </p>
+                              </div>
+                            ) : (
+                              <div>
+                                <div>Verifier Approvals:</div>
+                                <div>
+                                  {proj.verifiers
+                                    ?.map((v) =>
+                                      req.approvals?.[v] ? `${v} ✅` : `${v} ❌`
+                                    )
+                                    .join(" | ")}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 const DashboardSelector = () => {
   const dashboards = [
     {
-      title: "NGO Dashboard",
+      title: "Project Developer Dashboard",
       description: "Manage blue carbon projects, approve carbon credit requests, and track project progress",
       icon: (
         <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -43,7 +43,7 @@ const DashboardSelector = () => {
       textColor: "text-purple-600"
     },
     {
-      title: "Admin Dashboard",
+      title: "NCCR Dashboard",
       description: "Oversee system operations, manage projects, and coordinate with all stakeholders",
       icon: (
         <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 20 20">

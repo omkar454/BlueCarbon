@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { DB_NAME } from "../constants.js"; // make sure DB_NAME is defined in constants.js
 
 dotenv.config({
-  path: "C:\\bluecarbon-mvp\\backend\\.env",
+  path: "..\\.env",
 });
 
 const connectDB = async () => {

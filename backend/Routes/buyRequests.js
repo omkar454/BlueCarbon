@@ -5,7 +5,7 @@ import Project from "../models/project.js";
 import BuyRequest from "../models/buyRequest.js"; // New model we'll create
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../.env" });
+dotenv.config({ path: "C:\\bluecarbon-mvp\\backend\\.env" });
 
 const router = express.Router();
 

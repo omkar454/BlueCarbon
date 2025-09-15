@@ -5,7 +5,9 @@ import { ethers } from "ethers";
 import tokenJson from "../contracts/CarbonCreditToken.json" assert { type: "json" };
 import dotenv from "dotenv";
 
-dotenv.config({ path: "C:\\bluecarbon-mvp\\backend\\.env" });
+dotenv.config({
+  path: "C:\\bluecarbon-mvp\\backend\\.env",
+});
 
 const router = express.Router();
 
