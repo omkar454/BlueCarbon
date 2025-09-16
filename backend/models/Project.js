@@ -7,7 +7,7 @@ const projectSchema = new mongoose.Schema(
     ecosystemType: { type: String, required: true }, // Mangroves, Seagrass, etc.
     location: { type: [Number], required: true }, // [lat, lng]
     ngoWalletAddress: { type: String, required: true },
-    cid: { type: String, required: true }, // IPFS hash
+    cid: { type: String, required: true }, // IPFS hash or uploaded doc reference
     status: { type: String, default: "Pending" }, // Pending | Approved | Rejected
     verifiers: [{ type: String }], // assigned verifier addresses
     mintRequests: [
@@ -15,7 +15,13 @@ const projectSchema = new mongoose.Schema(
     ],
     minApprovals: { type: Number, default: 2 },
 
-    // ✅ New CCT tracking fields
+    // 🌱 New NGO reporting fields
+    saplings: { type: Number, required: true }, // no. of saplings planted
+    survivalRate: { type: Number, required: true }, // % survival
+    projectYears: { type: Number, required: true }, // project duration in years
+    area: { type: Number, required: true }, // area in hectares
+
+    // ✅ CCT tracking fields
     totalMintedCCT: { type: Number, default: 0 }, // total ever minted
     bufferCCT: { type: Number, default: 0 }, // 10% buffer allocation
     soldCCT: { type: Number, default: 0 }, // total sold to companies

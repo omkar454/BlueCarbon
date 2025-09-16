@@ -7,26 +7,29 @@ import dotenv from "dotenv";
 import Project from "../../models/Project.js";
 import { ethers } from "ethers";
 
-dotenv.config({
-  path: "C:\\bluecarbon-mvp\\backend\\.env",
-});
+// Load environment variables
+dotenv.config();
 
 const router = express.Router();
 
+// Pinata setup
 const pinata = new PinataSDK(
   process.env.PINATA_API_KEY,
   process.env.PINATA_SECRET_API_KEY
 );
 
+// Multer for file uploads
 const upload = multer({ dest: path.join(process.cwd(), "uploads/") });
 
 router.post("/upload", upload.single("file"), async (req, res) => {
+  const file = req.file;
+
   try {
-    const file = req.file;
-    if (!file)
+    if (!file) {
       return res
         .status(400)
         .json({ success: false, error: "No file uploaded" });
+    }
 
     const {
       projectName,
@@ -34,29 +37,56 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       ecosystemType,
       location,
       ngoWalletAddress,
+      area,
+      projectYears,
+      survivalRate,
+      saplings,
     } = req.body;
-    if (!projectName || !description || !ecosystemType || !location)
+
+    // Validate required fields
+    if (
+      !projectName ||
+      !description ||
+      !ecosystemType ||
+      !location ||
+      !ngoWalletAddress ||
+      !area ||
+      !projectYears ||
+      !survivalRate ||
+      !saplings
+    ) {
       return res
         .status(400)
-        .json({ success: false, error: "Missing project fields" });
+        .json({ success: false, error: "Missing required project fields" });
+    }
 
-    if (!ngoWalletAddress || !ethers.isAddress(ngoWalletAddress)) {
+    // Validate NGO wallet address
+    if (!ethers.isAddress(ngoWalletAddress)) {
       return res
         .status(400)
         .json({ success: false, error: "Invalid NGO wallet address" });
     }
 
-    const parsedLocation = JSON.parse(location);
-    const readableStreamForFile = fs.createReadStream(file.path);
+    // Parse location [lat, lng]
+    let parsedLocation;
+    try {
+      parsedLocation = JSON.parse(location);
+    } catch {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid location format" });
+    }
 
+    // Upload NGO evidence file to Pinata
+    const readableStreamForFile = fs.createReadStream(file.path);
     const options = {
       pinataMetadata: { name: file.originalname },
       pinataOptions: { cidVersion: 1 },
     };
 
     const result = await pinata.pinFileToIPFS(readableStreamForFile, options);
-    fs.unlinkSync(file.path);
 
+    // Save project to MongoDB
     const newProject = new Project({
       projectName,
       description,
@@ -65,14 +95,27 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       cid: result.IpfsHash,
       status: "Pending",
       ngoWalletAddress,
+      area,
+      projectYears,
+      survivalRate,
+      saplings,
     });
 
     await newProject.save();
 
-    res.json({ success: true, cid: result.IpfsHash, project: newProject });
+    res.json({
+      success: true,
+      cid: result.IpfsHash,
+      project: newProject,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Upload error:", err);
     res.status(500).json({ success: false, error: err.message });
+  } finally {
+    // Always clean up the uploaded temporary file
+    if (file && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
   }
 });
 

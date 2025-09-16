@@ -12,9 +12,8 @@ import fs from "fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 
-dotenv.config({
-  path: "C:\\bluecarbon-mvp\\backend\\.env",
-});
+// Corrected dotenv path to be cross-platform and dynamic
+dotenv.config({ path: path.resolve(process.cwd(), "..", ".env") });
 
 const router = express.Router();
 const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_RPC_URL);
@@ -71,6 +70,7 @@ router.get("/pending", async (req, res) => {
   }
 });
 
+// NOTE: This route needs to be protected with authentication (e.g., admin role)
 router.post("/approve/:id", async (req, res) => {
   try {
     const company = await Company.findById(req.params.id);
@@ -90,6 +90,7 @@ router.post("/approve/:id", async (req, res) => {
   }
 });
 
+// NOTE: This route needs to be protected with authentication (e.g., admin role)
 router.post("/reject/:id", async (req, res) => {
   try {
     const company = await Company.findById(req.params.id);
@@ -110,6 +111,7 @@ router.post("/reject/:id", async (req, res) => {
 });
 
 /* -------------------- GET PROJECTS + TRANSACTIONS -------------------- */
+// NOTE: This route provides the raw data for the frontend to calculate
 router.get("/projects", async (req, res) => {
   try {
     const { wallet } = req.query;
@@ -124,57 +126,38 @@ router.get("/projects", async (req, res) => {
         .status(404)
         .json({ success: false, error: "Company not found" });
 
+    // Fetch approved projects with a mint history
     const projects = await Project.find({
       status: "Approved",
-      mintRequests: { $exists: true, $ne: [] },
-    })
-      .populate({
-        path: "mintRequests",
-        match: { status: "Executed" },
-      })
-      .sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 });
 
-    const projectsWithExecutedMints = projects.filter(
-      (p) => p.mintRequests && p.mintRequests.length > 0
-    );
-
-    const projectsWithTransactions = await Promise.all(
-      projectsWithExecutedMints.map(async (project) => {
-        const transactions = await CompanyTransaction.find({
+    const projectsWithDetails = await Promise.all(
+      projects.map(async (project) => {
+        // Fetch only transactions relevant to this company and project
+        const companyTransactions = await CompanyTransaction.find({
           company: company._id,
           projectId: project._id,
           status: "Completed",
         });
 
-        const boughtCCT = transactions
+        // Calculate CCT bought and retired by this specific company
+        const boughtCCT = companyTransactions
           .filter((tx) => tx.type === "buy")
           .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
-        const retiredCCT = transactions
+        const retiredCCT_byCompany = companyTransactions
           .filter((tx) => tx.type === "retire")
           .reduce((sum, tx) => sum + Number(tx.amount), 0);
-
-        const totalMintedCCT = project.mintRequests
-          .filter((mr) => mr.status === "Executed")
-          .reduce((sum, mr) => sum + Number(mr.amount), 0);
-
-        const availableCCT = Math.max(
-          0,
-          totalMintedCCT - retiredCCT - boughtCCT
-        );
 
         return {
           ...project.toObject(),
           boughtCCT,
-          retiredCCT,
-          totalMintedCCT,
-          availableCCT,
-          transactions,
+          retiredCCT_byCompany,
         };
       })
     );
 
-    res.json({ success: true, company, projects: projectsWithTransactions });
+    res.json({ success: true, company, projects: projectsWithDetails });
   } catch (err) {
     console.error("❌ Fetch projects error:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -193,6 +176,7 @@ router.get("/balance/:wallet", async (req, res) => {
 });
 
 /* -------------------- BUY (Instant Purchase) -------------------- */
+// NOTE: This route should be protected with signed-message verification
 router.post("/buy", async (req, res) => {
   try {
     const { companyWallet, projectId, amount, txHash, ngoWallet } = req.body;
@@ -276,6 +260,7 @@ router.post("/createBuyRequest", async (req, res) => {
   }
 });
 
+// NOTE: This route needs to be protected with authentication
 router.get("/pendingBuyRequests/:ngoWallet", async (req, res) => {
   try {
     const ngoWallet = req.params.ngoWallet.toLowerCase();
@@ -303,6 +288,7 @@ router.get("/pendingBuyRequests/:ngoWallet", async (req, res) => {
   }
 });
 
+// NOTE: This route should be protected with signed-message verification
 router.post("/approveBuy", async (req, res) => {
   try {
     const { requestId, txHash } = req.body;
@@ -335,6 +321,13 @@ router.post("/approveBuy", async (req, res) => {
     });
     await transaction.save();
 
+    // Recommended: Update the Project model with the new sold amount
+    await Project.findByIdAndUpdate(
+      buyRequest.projectId._id,
+      { $inc: { soldCCT: Number(buyRequest.amount) } },
+      { new: true }
+    );
+
     res.json({
       success: true,
       message: "Buy request approved and CCT transferred",
@@ -347,6 +340,8 @@ router.post("/approveBuy", async (req, res) => {
 });
 
 /* -------------------- RETIRE CCT -------------------- */
+// NOTE: This route should be protected with signed-message verification
+
 router.post("/retire", async (req, res) => {
   try {
     const { companyWallet, projectId, amount, txHash } = req.body;
@@ -361,14 +356,17 @@ router.post("/retire", async (req, res) => {
         .json({ success: false, error: "Company not verified" });
     }
 
-    const project = await Project.findById(projectId);
-    if (!project)
+    const project = await Project.findByIdAndUpdate(
+      projectId,
+      { $inc: { retiredCCT: Number(amount) } },
+      { new: true }
+    );
+
+    if (!project) {
       return res
         .status(404)
         .json({ success: false, error: "Project not found" });
-
-    project.retiredCCT = (project.retiredCCT || 0) + Number(amount);
-    await project.save();
+    }
 
     const transaction = new CompanyTransaction({
       company: company._id,
@@ -382,7 +380,6 @@ router.post("/retire", async (req, res) => {
     });
     await transaction.save();
 
-    // Certificate + QR (in-memory QR instead of extra PNG)
     const certificatesDir = path.join(process.cwd(), "certificates");
     if (!fs.existsSync(certificatesDir)) fs.mkdirSync(certificatesDir);
 
@@ -391,47 +388,191 @@ router.post("/retire", async (req, res) => {
     }-${Date.now()}-certificate.pdf`;
     const pdfPath = path.join(certificatesDir, fileName);
 
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({
+      margin: 50,
+      info: {
+        Title: "Carbon Credit Retirement Certificate",
+        Author: "National Council of Coastal Research (NCCR)",
+      },
+    });
+
     doc.pipe(fs.createWriteStream(pdfPath));
 
+    const logoPath = path.join(process.cwd(), "public", "nccr-logo.png");
+    let logoVisible = false;
+
+    // Check if the logo file exists
+    if (fs.existsSync(logoPath)) {
+      logoVisible = true;
+      doc.image(logoPath, doc.page.width / 2 - 60, 50, { width: 120 });
+      doc.moveDown(2);
+    } else {
+      console.error("❌ Logo file not found at:", logoPath);
+      doc
+        .fontSize(22)
+        .font("Helvetica-Bold")
+        .fillColor("#004080")
+        .text("NATIONAL COUNCIL OF COASTAL RESEARCH (NCCR)", {
+          align: "center",
+        });
+      doc.moveDown(1);
+    }
+
+    // Main Certificate Title
     doc
-      .fontSize(22)
-      .fillColor("#2E8B57")
-      .text("National Coast of Central Research (NCCR)", { align: "center" });
-    doc.moveDown(1);
-    doc
-      .fontSize(16)
-      .fillColor("black")
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .fillColor("#004080")
       .text("Official Carbon Credit Retirement Certificate", {
         align: "center",
         underline: true,
       });
     doc.moveDown(2);
 
+    // Introduction Text
     doc
       .fontSize(14)
-      .text(`Issued to: ${company.name}`, { align: "center" })
-      .moveDown(1);
+      .font("Helvetica")
+      .fillColor("black")
+      .text("This certifies that:", { align: "center" });
+    doc.moveDown(1);
+
+    // Company Name (Prominent)
+    doc
+      .fontSize(28)
+      .font("Helvetica-Bold")
+      .fillColor("#2E8B57")
+      .text(company.name.toUpperCase(), { align: "center" });
+    doc.moveDown(1.5);
+
+    // Project Association Text
+    doc
+      .fontSize(14)
+      .font("Helvetica")
+      .fillColor("black")
+      .text(`has successfully retired carbon credits from the project:`, {
+        align: "center",
+      });
+    doc.moveDown(1);
+
+    // Project Name (Prominent)
+    doc
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .fillColor("#4682B4")
+      .text(project.projectName, { align: "center" });
+    doc.moveDown(2);
+
+    // Details Section
+    doc.fontSize(12);
+    doc.font("Helvetica-Bold").text("Retirement Details:");
+    doc.moveDown(0.5);
+
+    // Helper function to create two-column layout
+    const addDetailLine = (label, value) => {
+      doc
+        .font("Helvetica-Bold")
+        .text(`${label}:`, { continued: true, align: "left" });
+      doc.font("Helvetica").text(` ${value}`, { align: "left" });
+      doc.moveDown(0.5);
+    };
+
+    addDetailLine("Company Wallet", companyWallet);
+    addDetailLine(
+      "Project Location",
+      `${project.location[0]}, ${project.location[1]}`
+    );
+    addDetailLine("Ecosystem Type", project.ecosystemType);
+    addDetailLine("Credits Retired", `${amount} CCT`);
+    addDetailLine("Certificate ID", `${transaction._id.toString()}`);
+    addDetailLine("Date of Retirement", new Date().toLocaleString());
+
+    doc.moveDown(2);
+
+    // Footer / Closing Statement
     doc
       .fontSize(12)
-      .text(`Project: ${project.projectName}`, { align: "center" })
-      .moveDown(1);
+      .font("Helvetica-Bold")
+      .fillColor("#004080")
+      .text("Commitment to Environmental Sustainability", { align: "center" });
+    doc.moveDown(0.5);
     doc
-      .text(`Company Wallet: ${companyWallet}`)
-      .text(`Credits Retired: ${amount} CCT`)
-      .text(`Transaction Hash: ${txHash}`)
-      .text(`Date: ${new Date().toLocaleString()}`)
-      .moveDown(2);
+      .fontSize(10)
+      .font("Helvetica")
+      .fillColor("#888888")
+      .text("This certificate acknowledges the valuable contribution of", {
+        align: "center",
+      });
+    doc.moveDown(0.5);
+    doc
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .fillColor("#004080")
+      .text(company.name.toUpperCase(), { align: "center" });
+    doc.moveDown(0.5);
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .fillColor("#888888")
+      .text("to a sustainable future through responsible carbon management.", {
+        align: "center",
+      });
+    // --- Start of QR Code and Text positioning changes ---
+    doc.moveDown(1); // Give some space before the QR section
 
+    // ----------------------------------------------------
+    // QR Code Section - With text now placed ABOVE the QR code
+    // ----------------------------------------------------
     const txUrl = `https://sepolia.etherscan.io/tx/${txHash}`;
-    const qrCodeDataUrl = await QRCode.toDataURL(txUrl);
-    doc.image(Buffer.from(qrCodeDataUrl.split(",")[1], "base64"), {
-      align: "center",
-      width: 150,
+    const qrCodeDataUrl = await QRCode.toDataURL(txUrl, {
+      errorCorrectionLevel: "H",
+      type: "image/png",
+      width: 120,
     });
+
+    const qrCodeHeight = 120; // QR code image size
+    const textLineHeight = 15; // Estimated height for one line of text
+    const spacing = 15; // Space between text and QR code
+
+    // Calculate total height needed for QR code, text, and spacing
+    const totalQrSectionHeight = textLineHeight + spacing + qrCodeHeight;
+
+    // Calculate vertical position for the section to be above the bottom margin
+    // We want the *entire section* (text + spacing + QR) to fit
+    const bottomMargin = doc.page.margins.bottom;
+    const availableHeightFromBottom = doc.page.height - bottomMargin;
+
+    // Position the current Y cursor for the *start* of the text
+    doc.y = availableHeightFromBottom - totalQrSectionHeight;
+
+    // Draw the text
     doc
-      .moveDown(1)
-      .text("Scan QR to verify transaction on blockchain", { align: "center" });
+      .fontSize(10)
+      .font("Helvetica")
+      .fillColor("#555555")
+      .text("Scan to verify the blockchain transaction", {
+        align: "center",
+      });
+
+    doc.moveDown(1); // Space between text and QR code
+
+    // Draw the QR code
+    doc.image(
+      Buffer.from(qrCodeDataUrl.split(",")[1], "base64"),
+      doc.page.width / 2 - 60,
+      doc.y, // Use current doc.y which is now below the text
+      { width: 120 }
+    );
+
+    // --- End of QR Code and Text positioning changes ---
+    doc.moveDown(1); // Final move down before border, if needed
+
+    // Add a subtle border to the page
+    doc
+      .lineWidth(1)
+      .strokeColor("#D3D3D3")
+      .rect(40, 40, doc.page.width - 80, doc.page.height - 80)
+      .stroke();
 
     doc.end();
 
@@ -447,22 +588,22 @@ router.post("/retire", async (req, res) => {
 });
 
 /* -------------------- TRANSACTIONS -------------------- */
+// NOTE: This route should be protected with authentication
 router.get("/transactions/:companyId", async (req, res) => {
   try {
     const transactions = await CompanyTransaction.find({
       company: req.params.companyId,
     })
-      .populate("projectId", "projectName") // Populate projectName
+      .populate("projectId", "projectName")
       .sort({ createdAt: -1 });
 
-    // Flatten projectName into top-level field
     const formatted = transactions.map((tx) => ({
       _id: tx._id,
       type: tx.type,
       amount: tx.amount,
       txHash: tx.txHash,
       createdAt: tx.createdAt,
-      projectName: tx.projectId?.projectName || "N/A", // <-- Flatten here
+      projectName: tx.projectId?.projectName || "N/A",
     }));
 
     res.json({ success: true, transactions: formatted });
@@ -471,6 +612,5 @@ router.get("/transactions/:companyId", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 
 export default router;

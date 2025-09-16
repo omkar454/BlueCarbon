@@ -179,193 +179,340 @@ const CompanyDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            <span className="text-blue-600">Company</span> Dashboard
-          </h1>
-          <p className="text-gray-600">
-            Manage your projects and carbon credits
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-4xl font-bold text-gray-900 mb-6 text-center">
+          <span className="text-blue-600">Company</span> Dashboard
+        </h1>
+        <p className="text-center text-gray-600 mb-10">
+          Manage your company details, carbon credit projects, and transactions.
+        </p>
 
-        {/* Error */}
+        {/* Status Messages */}
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6 rounded-lg">
-            <p className="text-sm text-red-700">
-              <strong>Error:</strong> {error}
-            </p>
+          <div
+            className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-sm"
+            role="alert"
+          >
+            <p className="font-bold">Error</p>
+            <p>{error}</p>
           </div>
         )}
 
-        {/* Loading */}
         {loading && (
-          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-lg">
-            <p className="text-sm text-blue-700">
-              <strong>Loading...</strong>
-            </p>
+          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded-lg shadow-sm">
+            <p className="font-bold">Loading...</p>
+            <p>Please wait while we fetch your data.</p>
           </div>
         )}
 
-        {/* Registration */}
+        {/* Registration Section */}
         {!submitted && (
-          <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Company Registration
+          <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-200">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+              Register Your Company
             </h2>
-            {["name", "walletAddress", "registrationNumber", "sector"].map(
-              (field) => (
-                <input
-                  key={field}
-                  type="text"
-                  placeholder={field.replace(/([A-Z])/g, " $1")}
-                  value={company[field]}
-                  onChange={(e) =>
-                    setCompany({ ...company, [field]: e.target.value })
-                  }
-                  className="border p-2 w-full rounded mb-2"
-                />
-              )
-            )}
-            <button
-              onClick={handleSubmitCompany}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-            >
-              Submit
-            </button>
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Company Name"
+                value={company.name}
+                onChange={(e) =>
+                  setCompany({ ...company, name: e.target.value })
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Wallet Address"
+                value={company.walletAddress}
+                onChange={(e) =>
+                  setCompany({ ...company, walletAddress: e.target.value })
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Registration Number"
+                value={company.registrationNumber}
+                onChange={(e) =>
+                  setCompany({ ...company, registrationNumber: e.target.value })
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Sector"
+                value={company.sector}
+                onChange={(e) =>
+                  setCompany({ ...company, sector: e.target.value })
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleSubmitCompany}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300"
+              >
+                Submit for Verification
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Pending Approval */}
+        {/* Pending Approval Message */}
         {submitted && !isVerified && (
-          <div className="bg-yellow-100 p-6 rounded shadow mb-6">
-            <p className="text-yellow-800 font-semibold">
-              Your company details have been submitted. Awaiting NCCR
-              approval...
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-6 rounded-lg mb-8 shadow-md">
+            <div className="flex items-center">
+              <svg
+                className="h-6 w-6 text-yellow-500 mr-4"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.487 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <h2 className="text-xl font-bold">Awaiting NCCR Approval</h2>
+            </div>
+            <p className="mt-2 text-sm">
+              Thank you for submitting your company details. Your request is now
+              being reviewed by the National Carbon Credit Registry. You will be
+              able to access the full dashboard once your company is verified.
             </p>
           </div>
         )}
 
-        {/* Verified Dashboard */}
+        {/* Verified Dashboard Content */}
         {isVerified && (
-          <div className="space-y-4">
-            {projects.length === 0 && (
-              <p className="text-gray-600">No projects available.</p>
-            )}
+          <div className="space-y-8">
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                Available Projects
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.length === 0 && (
+                  <p className="text-gray-500 text-center col-span-full">
+                    No projects are currently available for purchase.
+                  </p>
+                )}
+                {projects.map((proj) => {
+                  const ownedCCT =
+                    (proj.boughtCCT || 0) - (proj.retiredCCT || 0);
+                  const availableCCT =
+                    (proj.totalMintedCCT || 0) -
+                    (proj.bufferCCT || 0) -
+                    (proj.retiredCCT || 0) -
+                    (proj.soldCCT || 0);
 
-            {projects.map((proj) => {
-              const ownedCCT = (proj.boughtCCT || 0) - (proj.retiredCCT || 0);
-              const availableCCT =
-                (proj.totalMintedCCT || 0) -
-                (proj.bufferCCT || 0) -
-                (proj.retiredCCT || 0) -
-                (proj.soldCCT || 0);
-
-              return (
-                <div
-                  key={proj._id}
-                  className="bg-white p-4 rounded shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
-                >
-                  <div>
-                    <h2 className="font-semibold text-lg">
-                      {proj.projectName}
-                    </h2>
-                    <p>Ecosystem: {proj.ecosystemType}</p>
-                    <p>Status: {proj.status}</p>
-                    <p>
-                      Developer Wallet: {proj.ngoWalletAddress || "❌ Missing"}
-                    </p>
-                    {proj.cid && (
-                      <a
-                        href={`https://ipfs.io/ipfs/${proj.cid}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 underline"
-                      >
-                        View Evidence
-                      </a>
-                    )}
-                    <p>Total Minted CCT: {proj.totalMintedCCT || 0}</p>
-                    <p>Buffer Wallet CCT: {proj.bufferCCT || 0}</p>
-                    <p>Available CCT: {availableCCT}</p>
-                    <p>Owned CCT: {ownedCCT}</p>
-                    <p>Retired CCT: {proj.retiredCCT || 0}</p>
-                  </div>
-
-                  <div className="space-x-2 mt-2 md:mt-0">
-                    <button
-                      onClick={() =>
-                        handleBuy(proj._id, availableCCT, proj.ngoWalletAddress)
-                      }
-                      disabled={
-                        loading || !(availableCCT > 0 && proj.ngoWalletAddress)
-                      }
-                      className={`px-4 py-2 rounded text-white ${
-                        loading || !(availableCCT > 0 && proj.ngoWalletAddress)
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-green-600 hover:bg-green-700"
-                      }`}
+                  return (
+                    <div
+                      key={proj._id}
+                      className="bg-gray-50 p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col justify-between h-full"
                     >
-                      {loading ? "Processing..." : "Request CCT"}
-                    </button>
-                    <button
-                      onClick={() => handleRetire(proj._id, ownedCCT)}
-                      disabled={loading || ownedCCT <= 0}
-                      className={`px-4 py-2 rounded text-white ${
-                        loading || ownedCCT <= 0
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-red-600 hover:bg-red-700"
-                      }`}
-                    >
-                      {loading ? "Processing..." : "Retire CCT"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                          {proj.projectName}
+                        </h3>
+                        <p className="text-sm text-gray-600 italic mb-4">
+                          {proj.description}
+                        </p>
 
-            {/* Transaction History */}
-            <div className="bg-white p-4 rounded shadow mt-6">
-              <h2 className="text-xl font-semibold mb-4">
+                        <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm text-gray-700">
+                          <p>
+                            <strong>Ecosystem:</strong> {proj.ecosystemType}
+                          </p>
+                          <p>
+                            <strong>Saplings:</strong> {proj.saplings}
+                          </p>
+                          <p>
+                            <strong>Area:</strong> {proj.area} ha
+                          </p>
+                          <p>
+                            <strong>Survival Rate:</strong> {proj.survivalRate}%
+                          </p>
+                          <p>
+                            <strong>Project Years:</strong> {proj.projectYears}
+                          </p>
+                          <p>
+                            <strong>Status:</strong>{" "}
+                            <span
+                              className={`font-bold ${
+                                proj.status === "Minted"
+                                  ? "text-green-600"
+                                  : "text-yellow-600"
+                              }`}
+                            >
+                              {proj.status}
+                            </span>
+                          </p>
+                          <p>
+                            <strong>Total Minted CCT:</strong>{" "}
+                            <span className="font-bold">
+                              {proj.totalMintedCCT || 0}
+                            </span>
+                          </p>
+                          <p>
+                            <strong>Available CCT:</strong>{" "}
+                            <span className="font-bold text-blue-600">
+                              {availableCCT}
+                            </span>
+                          </p>
+                          <p>
+                            <strong>Owned CCT:</strong>{" "}
+                            <span className="font-bold text-green-600">
+                              {ownedCCT}
+                            </span>
+                          </p>
+                          <p>
+                            <strong>Retired CCT:</strong>{" "}
+                            <span className="font-bold">
+                              {proj.retiredCCT || 0}
+                            </span>
+                          </p>
+                          {proj.cid && (
+                            <p className="col-span-2">
+                              <a
+                                href={`https://ipfs.io/ipfs/${proj.cid}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline inline-flex items-center"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-4 w-4 mr-1"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                  />
+                                </svg>
+                                View Evidence
+                              </a>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                        <button
+                          onClick={() =>
+                            handleBuy(
+                              proj._id,
+                              availableCCT,
+                              proj.ngoWalletAddress
+                            )
+                          }
+                          disabled={
+                            loading ||
+                            !(availableCCT > 0 && proj.ngoWalletAddress)
+                          }
+                          className={`w-full px-4 py-2 rounded-md font-semibold text-white transition duration-300 ${
+                            loading ||
+                            !(availableCCT > 0 && proj.ngoWalletAddress)
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-green-600 hover:bg-green-700"
+                          }`}
+                        >
+                          {loading ? "Processing..." : "Request CCT"}
+                        </button>
+                        <button
+                          onClick={() => handleRetire(proj._id, ownedCCT)}
+                          disabled={loading || ownedCCT <= 0}
+                          className={`w-full px-4 py-2 rounded-md font-semibold text-white transition duration-300 ${
+                            loading || ownedCCT <= 0
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-red-600 hover:bg-red-700"
+                          }`}
+                        >
+                          {loading ? "Processing..." : "Retire CCT"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Transaction History Section */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">
                 Transaction History
               </h2>
-              {transactions.length === 0 && <p>No transactions yet.</p>}
-              {transactions.length > 0 && (
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="border p-2">Type</th>
-                      <th className="border p-2">Project</th>
-                      <th className="border p-2">Amount</th>
-                      <th className="border p-2">TX Hash</th>
-                      <th className="border p-2">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((tx) => (
-                      <tr key={tx._id}>
-                        <td className="border p-2">{tx.type}</td>
-                        <td className="border p-2">{tx.projectName}</td>
-                        <td className="border p-2">{tx.amount} CCT</td>
-                        <td className="border p-2">
-                          <a
-                            href={`https://sepolia.etherscan.io/tx/${tx.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {tx.txHash.slice(0, 10)}...
-                          </a>
-                        </td>
-                        <td className="border p-2">
-                          {new Date(tx.createdAt).toLocaleString()}
-                        </td>
+              {transactions.length === 0 ? (
+                <p className="text-gray-500">No transactions recorded yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Type
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Project
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Amount
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Transaction Hash
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Date
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {transactions.map((tx) => (
+                        <tr key={tx._id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {tx.type}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {tx.projectName}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
+                            {tx.amount} CCT
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-600 underline hover:text-blue-800">
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${tx.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {tx.txHash.slice(0, 10)}...{tx.txHash.slice(-8)}
+                            </a>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(tx.createdAt).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
