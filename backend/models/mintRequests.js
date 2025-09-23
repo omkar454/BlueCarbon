@@ -9,7 +9,12 @@ const mintRequestSchema = new mongoose.Schema(
       required: true,
     },
     requestId: { type: String, required: true, index: true },
-    amount: { type: String, required: true },
+    amount: { type: String, required: true }, // minted amount (in tokens)
+
+    // ✅ New fields for standards compliance
+    eligibleCCT: { type: Number, default: 0 }, // calculated via Verra/Gold formula
+    evidenceUrl: { type: String, default: "" }, // link to uploaded proof/document
+
     approvals: { type: Object, default: {} },
     status: {
       type: String,

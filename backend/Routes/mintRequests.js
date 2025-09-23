@@ -4,6 +4,7 @@ import MintRequest from "../models/mintRequests.js";
 import Project from "../models/Project.js";
 import { ethers } from "ethers";
 import tokenJson from "../contracts/CarbonCreditToken.json" assert { type: "json" };
+import { calculateCCT } from "../utils/calculateCCT.js";
 import dotenv from "dotenv";
 
 dotenv.config({
@@ -27,9 +28,13 @@ const tokenContract = new ethers.Contract(
 /* ---------------- CREATE MINT REQUEST ---------------- */
 router.post("/create-request", async (req, res) => {
   try {
-    const { projectId, ngoAddress, amount } = req.body;
-    if (!projectId || !ngoAddress || !amount) {
-      return res.status(400).json({ success: false, error: "Missing fields" });
+    const { projectId, ngoAddress, evidenceUrl } = req.body;
+
+    if (!projectId || !ngoAddress) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing fields (projectId or ngoAddress)",
+      });
     }
 
     const project = await Project.findById(projectId);
@@ -38,7 +43,11 @@ router.post("/create-request", async (req, res) => {
         .status(404)
         .json({ success: false, error: "Project not found" });
 
-    const amountParsed = ethers.parseUnits(amount.toString(), 18);
+    // ✅ Use shared utility for CCT calculation
+    const eligibleCCT = calculateCCT(project);
+
+    const amountParsed = ethers.parseUnits(eligibleCCT.toString(), 18);
+
     const tx = await tokenContract.createMintRequest(ngoAddress, amountParsed);
     const receipt = await tx.wait();
 
@@ -58,23 +67,34 @@ router.post("/create-request", async (req, res) => {
     const mintRequest = new MintRequest({
       projectId: project._id,
       requestId,
-      amount: amount.toString(),
+      amount: eligibleCCT.toString(),
+      eligibleCCT,
+      evidenceUrl: evidenceUrl || "",
       status: "Pending",
       approvals: {},
       bufferWallet: "",
       mintedToNGO: false,
     });
+
     await mintRequest.save();
 
     project.mintRequests.push(mintRequest._id);
     await project.save();
 
-    res.json({ success: true, txHash: tx.hash, requestId, mintRequest });
+    res.json({
+      success: true,
+      txHash: tx.hash,
+      requestId,
+      mintRequest,
+      eligibleCCT,
+    });
   } catch (err) {
     console.error("❌ Create mint request error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+
 
 /* ---------------- GET MINT REQUESTS FOR PROJECT ---------------- */
 router.get("/project/:projectId", async (req, res) => {
@@ -116,14 +136,13 @@ router.post("/approveByVerifier", async (req, res) => {
     const assignedVerifiers = project.verifiers.map((v) => v.toLowerCase());
 
     if (!assignedVerifiers.includes(normalizedAddress)) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Verifier not assigned to this project",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Verifier not assigned to this project",
+      });
     }
 
+    // ✅ Initialize approvals if not already
     mintRequest.approvals = mintRequest.approvals || {};
     if (mintRequest.approvals[normalizedAddress]) {
       return res
@@ -131,16 +150,23 @@ router.post("/approveByVerifier", async (req, res) => {
         .json({ success: false, error: "Already approved by this verifier" });
     }
 
+    // ✅ Mark verifier approval
     mintRequest.approvals[normalizedAddress] = true;
+
+    // ✅ Count approvals
     const approvedCount = Object.values(mintRequest.approvals).filter(
       (v) => v === true
     ).length;
 
+    // ✅ Check if standard-based minimum approvals met
     if (approvedCount >= project.minApprovals && !mintRequest.mintedToNGO) {
       mintRequest.status = "Executed";
       mintRequest.mintedToNGO = true;
       mintRequest.ngoWallet = project.ngoWalletAddress;
       mintRequest.bufferWallet = "0xc856247352eCbb0FE4e214290080E4522475ff85";
+
+      // Optional: enforce eligibleCCT as final amount
+      mintRequest.amount = mintRequest.eligibleCCT.toString();
     } else if (mintRequest.status !== "Executed") {
       mintRequest.status = "PartiallyApproved";
     }
@@ -159,14 +185,14 @@ router.post("/approveByVerifier", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Verifier approval error:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: err?.reason || err?.message || "Server error",
-      });
+    res.status(500).json({
+      success: false,
+      error: err?.reason || err?.message || "Server error",
+    });
   }
 });
+
+
 
 /* ---------------- GET PENDING REQUESTS FOR A VERIFIER ---------------- */
 router.get("/pending/:verifierAddress", async (req, res) => {
