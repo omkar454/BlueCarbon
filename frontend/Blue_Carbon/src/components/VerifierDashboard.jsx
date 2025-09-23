@@ -11,6 +11,7 @@ const VerifierDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [mintMessage, setMintMessage] = useState(null);
 
+  /* ---------------------- FETCH PENDING REQUESTS ---------------------- */
   const fetchPendingRequests = async (address = verifierAddress) => {
     if (!address) return;
     try {
@@ -22,6 +23,7 @@ const VerifierDashboard = () => {
     }
   };
 
+  /* ---------------------- CONNECT WALLET ---------------------- */
   const handleConnectWallet = async () => {
     if (!window.ethereum) return alert("Install MetaMask!");
     try {
@@ -41,6 +43,7 @@ const VerifierDashboard = () => {
     }
   };
 
+  /* ---------------------- APPROVE MINT REQUEST ---------------------- */
   const handleApprove = async (requestId) => {
     if (!signer) return alert("Connect wallet first!");
     setLoading(true);
@@ -51,6 +54,7 @@ const VerifierDashboard = () => {
         tokenJson.abi,
         signer
       );
+
       const tx = await tokenContract.approveMint(BigInt(requestId));
       await tx.wait();
 
@@ -97,6 +101,7 @@ const VerifierDashboard = () => {
     }
   };
 
+  /* ---------------------- HANDLE ACCOUNT CHANGES ---------------------- */
   useEffect(() => {
     if (!window.ethereum) return;
     const handleAccountsChanged = async (accounts) => {
@@ -119,17 +124,18 @@ const VerifierDashboard = () => {
       window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
   }, []);
 
+  /* ---------------------- AUTO-POLLING PENDING REQUESTS ---------------------- */
   useEffect(() => {
-    if (verifierAddress) {
-      fetchPendingRequests(verifierAddress);
-      const interval = setInterval(
-        () => fetchPendingRequests(verifierAddress),
-        10000
-      );
-      return () => clearInterval(interval);
-    }
+    if (!verifierAddress) return;
+    fetchPendingRequests(verifierAddress);
+    const interval = setInterval(
+      () => fetchPendingRequests(verifierAddress),
+      10000
+    );
+    return () => clearInterval(interval);
   }, [verifierAddress]);
 
+  /* ---------------------- RENDER ---------------------- */
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8 font-sans">
       <div className="max-w-6xl mx-auto">
@@ -140,7 +146,7 @@ const VerifierDashboard = () => {
           Review and approve project verification requests.
         </p>
 
-        {/* Wallet Connection Section */}
+        {/* Wallet Connection */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-200 flex flex-col md:flex-row md:items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-4 mb-2 md:mb-0">
@@ -181,7 +187,7 @@ const VerifierDashboard = () => {
           </div>
         </div>
 
-        {/* Minted CCT message */}
+        {/* Minted CCT Message */}
         {mintMessage && (
           <div className="bg-green-100 border border-green-400 p-6 rounded-lg mb-8 shadow-md transition-opacity duration-500 ease-in-out">
             <h2 className="text-green-800 font-bold text-xl mb-3">
@@ -208,30 +214,30 @@ const VerifierDashboard = () => {
               </div>
             </div>
             <p className="text-sm text-gray-500 mt-4 italic">
-              This message will disappear in a moment.
+              This message will disappear shortly.
             </p>
           </div>
         )}
 
-        {/* Main Content Area: Requests */}
+        {/* Pending Requests */}
         <div className="space-y-6">
           <h2 className="text-3xl font-bold text-gray-800 mb-4">
             Pending Mint Requests
           </h2>
-
-          {requests.length === 0 && verifierAddress && !loading && (
-            <div className="bg-white p-6 rounded-xl shadow border border-gray-200 text-center text-gray-500 text-lg">
-              <p>
-                No new mint requests are currently pending for your account. ✨
-              </p>
-            </div>
-          )}
 
           {!verifierAddress && !loading && (
             <div className="bg-white p-6 rounded-xl shadow border border-gray-200 text-center text-gray-500 text-lg">
               <p>
                 Please connect your wallet to view pending requests assigned to
                 you.
+              </p>
+            </div>
+          )}
+
+          {verifierAddress && requests.length === 0 && !loading && (
+            <div className="bg-white p-6 rounded-xl shadow border border-gray-200 text-center text-gray-500 text-lg">
+              <p>
+                No new mint requests are currently pending for your account. ✨
               </p>
             </div>
           )}
@@ -266,6 +272,7 @@ const VerifierDashboard = () => {
                 key={req._id}
                 className={`border rounded-lg p-6 shadow-md transition-shadow duration-300 hover:shadow-lg ${bgColor} ${borderColor}`}
               >
+                {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 pb-4 border-b border-gray-100">
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-gray-800">
@@ -285,6 +292,7 @@ const VerifierDashboard = () => {
                   </div>
                 </div>
 
+                {/* Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-6 text-sm text-gray-700 mb-4">
                   <p>
                     <strong>Ecosystem Type:</strong>{" "}
@@ -321,25 +329,12 @@ const VerifierDashboard = () => {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 underline font-medium mt-2 md:mt-0 inline-flex items-center"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 mr-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
                       View Evidence
                     </a>
                   )}
                 </div>
 
+                {/* Verifiers & Action */}
                 <div className="flex flex-col md:flex-row justify-between items-center pt-4 border-t border-gray-100">
                   <div className="flex items-center flex-wrap gap-2 text-sm text-gray-600 mb-4 md:mb-0">
                     <p className="font-semibold text-gray-800">Verifiers:</p>

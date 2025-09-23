@@ -1,5 +1,5 @@
 // src/components/NGOForm.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -8,7 +8,6 @@ import { ethers } from "ethers";
 import tokenJson from "../../Contracts/CarbonCreditToken.json";
 import { createMintRequest } from "../api/mintApi";
 
-// Fix Leaflet markers (keeps original behavior)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -36,7 +35,7 @@ const NGOForm = () => {
   const [saplings, setSaplings] = useState("");
   const [survivalRate, setSurvivalRate] = useState("");
   const [years, setYears] = useState("");
-  const [areaHa, setAreaHa] = useState("");
+  const [area, setArea] = useState("");
 
   const LocationMarker = () => {
     useMapEvents({
@@ -74,9 +73,7 @@ const NGOForm = () => {
       const res = await axios.get(
         `http://localhost:5000/api/projects/byNgo/${wallet}`
       );
-      if (res.data.success) {
-        setProjects(res.data.projects);
-      }
+      if (res.data.success) setProjects(res.data.projects);
     } catch (err) {
       console.error("Error fetching projects:", err);
     }
@@ -88,9 +85,7 @@ const NGOForm = () => {
       const res = await axios.get(
         `http://localhost:5000/api/company/pendingBuyRequests/${wallet}`
       );
-      if (res.data.success) {
-        setBuyRequests(res.data.requests);
-      }
+      if (res.data.success) setBuyRequests(res.data.requests);
     } catch (err) {
       console.error("Error fetching buy requests:", err);
     }
@@ -122,12 +117,11 @@ const NGOForm = () => {
 
   const handleSubmitProject = async (e) => {
     e.preventDefault();
-    if (!file || !projectName || !location || !ngoWallet) {
+    if (!file || !projectName || !location || !ngoWallet || !area) {
       return alert(
-        "Fill all required fields, upload evidence, and provide a location marker."
+        "Fill all required fields, upload evidence, and provide a location."
       );
     }
-
     try {
       setUploading(true);
       const formData = new FormData();
@@ -138,35 +132,26 @@ const NGOForm = () => {
       formData.append("saplings", saplings);
       formData.append("survivalRate", survivalRate);
       formData.append("projectYears", years);
-      formData.append("area", areaHa);
-
-      if (location) {
-        formData.append(
-          "location",
-          JSON.stringify([location.lat, location.lng])
-        );
-      }
-
+      formData.append("area", area);
+      formData.append("location", JSON.stringify([location.lat, location.lng]));
       formData.append("ngoWalletAddress", ngoWallet);
 
       const res = await axios.post(
         "http://localhost:5000/api/pinata/upload",
         formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
       if (res.data.success) {
         alert("✅ Project uploaded successfully!");
         fetchProjects(ngoWallet);
-        // reset form
+        // Reset form
         setProjectName("");
         setDescription("");
         setEcosystem("Mangroves");
         setFile(null);
         setLocation(null);
-        setAreaHa("");
+        setArea("");
         setSaplings("");
         setSurvivalRate("");
         setYears("");
@@ -184,13 +169,13 @@ const NGOForm = () => {
   };
 
   const handleMintRequest = async (project) => {
+    if (!signer) return alert("Connect wallet first");
     try {
-      if (!signer) return alert("Connect wallet first");
-      const amount = prompt("Enter number of carbon credits to mint:");
-      if (!amount) return;
-      const res = await createMintRequest(project._id, ngoWallet, amount);
+      const res = await createMintRequest(project._id, ngoWallet);
       if (!res.data.success) return alert("Failed to create mint request");
-      alert(`Mint request created! ID: ${res.data.requestId}`);
+      alert(
+        `✅ Mint request created! Eligible CCT: ${res.data.eligibleCCT} | Request ID: ${res.data.requestId}`
+      );
       fetchProjects(ngoWallet);
     } catch (err) {
       console.error(err);
@@ -233,11 +218,10 @@ const NGOForm = () => {
           <span className="text-blue-600">Project Developer</span> Dashboard
         </h1>
         <p className="text-center text-gray-600 mb-10">
-          Submit new projects, manage your portfolio, and approve carbon credit
-          requests.
+          Submit projects, manage portfolio, and approve carbon credit requests.
         </p>
 
-        {/* Connect Wallet Section */}
+        {/* Wallet Connect */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-200">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <button
@@ -256,23 +240,20 @@ const NGOForm = () => {
             {ngoWallet && (
               <div className="mt-4 md:mt-0 text-right text-sm text-gray-700">
                 <p className="truncate">
-                  <span className="font-semibold">Connected wallet:</span>{" "}
-                  {ngoWallet}
+                  <strong>Connected wallet:</strong> {ngoWallet}
                 </p>
                 <p>
-                  <span className="font-semibold">Pending buy requests:</span>{" "}
-                  {buyRequests.length}
+                  <strong>Pending buy requests:</strong> {buyRequests.length}
                 </p>
                 <p>
-                  <span className="font-semibold">Submitted projects:</span>{" "}
-                  {projects.length}
+                  <strong>Submitted projects:</strong> {projects.length}
                 </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Pending Buy Requests Section */}
+        {/* Pending Buy Requests */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-200">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">
             Pending Buy Requests
@@ -317,7 +298,7 @@ const NGOForm = () => {
           )}
         </div>
 
-        {/* Submit Project Section */}
+        {/* Submit Project */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-200">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">
             Submit a New Project
@@ -351,6 +332,7 @@ const NGOForm = () => {
                 </select>
               </div>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Description
@@ -361,6 +343,7 @@ const NGOForm = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -401,8 +384,8 @@ const NGOForm = () => {
                 </label>
                 <input
                   type="number"
-                  value={areaHa}
-                  onChange={(e) => setAreaHa(e.target.value)}
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
                   placeholder="e.g., 50.75"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
@@ -415,7 +398,7 @@ const NGOForm = () => {
                 Map Location
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                Click on the map to place a single marker for the project's main
+                Click on the map to place a single marker for the project's
                 location.
               </p>
               <MapContainer
@@ -432,7 +415,7 @@ const NGOForm = () => {
               </MapContainer>
               {location && (
                 <p className="mt-4 text-blue-700 font-semibold text-center">
-                  📍 Location: Latitude {location.lat.toFixed(4)}, Longitude{" "}
+                  📍 Latitude {location.lat.toFixed(4)}, Longitude{" "}
                   {location.lng.toFixed(4)}
                 </p>
               )}
@@ -464,15 +447,13 @@ const NGOForm = () => {
           </form>
         </div>
 
-        {/* Your Projects Section */}
+        {/* Projects Display */}
         <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">
             Your Projects
           </h2>
           {projects.length === 0 ? (
-            <p className="text-gray-500">
-              You haven't submitted any projects yet.
-            </p>
+            <p className="text-gray-500">No projects submitted yet.</p>
           ) : (
             <div className="space-y-6">
               {projects.map((proj) => (
@@ -523,6 +504,7 @@ const NGOForm = () => {
                       </p>
                     )}
                   </div>
+
                   <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between">
                     <p className="text-sm font-bold">
                       Status:{" "}
@@ -550,6 +532,7 @@ const NGOForm = () => {
                     )}
                   </div>
 
+                  {/* Mint Requests Display */}
                   {proj.mintRequests?.length > 0 && (
                     <div className="mt-4 border-t border-gray-200 pt-4">
                       <h3 className="text-lg font-semibold text-gray-700 mb-2">
@@ -557,7 +540,7 @@ const NGOForm = () => {
                       </h3>
                       <div className="space-y-3">
                         {proj.mintRequests.map((req) => {
-                          const totalAmount = Number(req.amount);
+                          const totalAmount = Number(req.eligibleCCT);
                           const developerAmount = Math.floor(totalAmount * 0.9);
                           const bufferAmount = totalAmount - developerAmount;
                           return (
@@ -570,10 +553,8 @@ const NGOForm = () => {
                               }`}
                             >
                               <p className="font-medium text-gray-800">
-                                Amount Requested:{" "}
-                                <span className="font-bold">
-                                  {req.amount} CCT
-                                </span>
+                                Eligible CCT:{" "}
+                                <span className="font-bold">{totalAmount}</span>
                               </p>
                               <p className="text-sm text-gray-700">
                                 Status:{" "}
@@ -590,28 +571,21 @@ const NGOForm = () => {
                               {req.status === "Executed" ? (
                                 <div className="mt-2 text-xs text-green-800">
                                   <p className="font-semibold">
-                                    ✅ Credits minted and distributed to
-                                    wallets.
+                                    ✅ Credits minted and distributed.
                                   </p>
                                   <p>
-                                    <span className="font-semibold">
-                                      Project Developer Wallet:
-                                    </span>{" "}
+                                    <strong>Project Developer Wallet:</strong>{" "}
                                     <span className="font-mono">
                                       {req.ngoWallet}
                                     </span>{" "}
-                                    | Amount Credited:{" "}
-                                    <strong>{developerAmount} CCT</strong>
+                                    | <strong>{developerAmount} CCT</strong>
                                   </p>
                                   <p>
-                                    <span className="font-semibold">
-                                      Buffer Wallet:
-                                    </span>{" "}
+                                    <strong>Buffer Wallet:</strong>{" "}
                                     <span className="font-mono">
                                       {req.bufferWallet}
                                     </span>{" "}
-                                    | Amount Credited:{" "}
-                                    <strong>{bufferAmount} CCT</strong>
+                                    | <strong>{bufferAmount} CCT</strong>
                                   </p>
                                 </div>
                               ) : (
